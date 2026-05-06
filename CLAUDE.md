@@ -13,10 +13,15 @@ The originals (`implement-app/` at this repo root, and `<your private backend sk
 ## Dev Commands
 
 ```bash
-node bin/bootstrap.js              # run CLI locally
+npm install                        # installs deps + triggers `prepare` → builds dist/
+npm run build                      # tsc + chmod +x on bin
+npm test                           # typecheck + lint:templates + snapshot tests
+node dist/bin/bootstrap.js         # run compiled CLI locally
 ```
 
-No build step — the CLI is plain Node.js with zero npm dependencies (built-ins only: `fs`, `path`, `readline`, `child_process`).
+The codebase is **TypeScript** (strict mode, `lib/*.ts` + `bin/*.ts`). Compiled output lives in `dist/` (gitignored — rebuilt by the `prepare` lifecycle hook on `npm install`). The package itself ships zero **runtime** npm dependencies; TypeScript and `@types/node` are devDependencies only, used at build time.
+
+When the package is installed via `npx github:sidzan/agent-orchestrap`, npm runs `prepare` which compiles the TS to `dist/`, and the bin entry runs from there.
 
 No `--update` or `--reconfigure` modes in v1. To pull in newer templates, the user re-runs the CLI; the rename-on-conflict policy produces a fresh `<name>-v2/` for hand-merging. See `docs/design.md` § "Open / deferred items" for the post-v1 update plan.
 
@@ -28,8 +33,11 @@ Manual test matrix (no automated tests in v1) lives at the bottom of `docs/desig
 
 | Path | Purpose |
 |---|---|
-| `bin/bootstrap.js` | CLI entry point (zero deps). Runs the 4-pass flow (detect → confirm → integrations → kernel render → pattern discovery). |
-| `lib/` | `detect.js` (stack detection), `prompts.js` (readline prompts), `substitute.js` (`{{CONFIG.*}}` + `{{#if}}` renderer), `install.js` (copy + write), `discover.js` (claude subprocess + per-stack `FRONTEND_DISCOVERIES` / `BACKEND_DISCOVERIES` lists; writes derived files into `<skillDir>/references/`). |
+| `bin/bootstrap.ts` | CLI entry point. Runs the 4-pass flow (detect → confirm → integrations → kernel render → pattern discovery). |
+| `lib/*.ts` | `detect`, `prompts`, `schema` (declared CONFIG shape), `render` (substitution + audit + atomic writes), `install` (per-skill orchestration), `discover` (claude subprocess + per-stack `FRONTEND_DISCOVERIES` / `BACKEND_DISCOVERIES`), `post-install` (auto-installs agent-browser skill + CLI + .mcp.json), `template-lint` (banned-literals + schema check). |
+| `dist/` | Compiled JS — gitignored, rebuilt on every `npm install` via `prepare` hook. |
+| `tsconfig.json` | Strict TypeScript settings, `outDir: dist`. |
+| `tests/snapshot.js` | Snapshot test driver — imports from `dist/lib/render`. |
 | `templates/frontend/implement-app/` | Frontend orchestrator kernel — methodology only (gates, personas incl. Inspector Clouseau, pipelines). No code templates, no shipped reference docs. |
 | `templates/backend/implement-backend/` | Backend orchestrator kernel — methodology only (gates, TDD-first personas, persona pointer table). No SQL assets, no shipped migration guide. |
 | `templates/shared/` | `jira-tracking/`, `create-pull-request/`, `sonar-fix/` — used by both orchestrators. |

@@ -1,26 +1,27 @@
 #!/usr/bin/env node
-"use strict";
+import * as fs from "fs";
+import * as path from "path";
+import { detect, FrontendDetection, BackendDetection, AppEntry } from "../lib/detect";
+import * as prompts from "../lib/prompts";
+import { installSkill, installHooks, installMcp, InstallSkillResult } from "../lib/install";
+import { runDiscovery, summarize } from "../lib/discover";
+import { installDependencies, DepSummary } from "../lib/post-install";
 
-const fs = require("fs");
-const path = require("path");
-const { detect } = require("../lib/detect");
-const prompts = require("../lib/prompts");
-const { installSkill, installHooks, installMcp } = require("../lib/install");
-const { runDiscovery, summarize } = require("../lib/discover");
-const { installDependencies } = require("../lib/post-install");
+const log = (msg: string) => process.stdout.write(`${msg}\n`);
+const err = (msg: string) => process.stderr.write(`${msg}\n`);
 
-const log = (msg) => process.stdout.write(`${msg}\n`);
-const err = (msg) => process.stderr.write(`${msg}\n`);
-
-const PACKAGE_ROOT = path.resolve(__dirname, "..");
+const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const TEMPLATES = path.join(PACKAGE_ROOT, "templates");
 
-function abort(message, code = 1) {
+function abort(message: string, code = 1): never {
   err(`\n✖ ${message}`);
   process.exit(code);
 }
 
-function abortOnInstallFailure(result, name) {
+function abortOnInstallFailure(
+  result: InstallSkillResult,
+  name: string
+): { skillName: string; target: string } {
   if (result.ok) return result;
   err(`\n✖ Failed to install ${name}.`);
   err(`The render produced ${result.errors?.length || 0} error(s); nothing was written.`);
@@ -36,15 +37,18 @@ function abortOnInstallFailure(result, name) {
   process.exit(3);
 }
 
-function isProjectRoot(cwd) {
+function isProjectRoot(cwd: string): boolean {
   return (
     fs.existsSync(path.join(cwd, "package.json")) ||
-    fs.readdirSync(cwd).some((f) => f.endsWith(".sln") || f.endsWith(".csproj"))
+    fs.readdirSync(cwd).some((f: string) => f.endsWith(".sln") || f.endsWith(".csproj"))
   );
 }
 
-async function chooseStacks(detection) {
-  const opts = [];
+type Stack = "frontend" | "backend";
+
+async function chooseStacks(detection: { frontend: FrontendDetection | null; backend: BackendDetection | null }): Promise<Stack[]> {
+  type StackKey = Stack | "both";
+  const opts: { key: StackKey; label: string }[] = [];
   if (detection.frontend) opts.push({ key: "frontend", label: "Frontend (React)" });
   if (detection.backend) opts.push({ key: "backend", label: "Backend (C#)" });
   if (detection.frontend && detection.backend)
@@ -62,18 +66,27 @@ async function chooseStacks(detection) {
     return opts[0].key === "frontend" ? ["frontend"] : ["backend"];
   }
 
-  const picked = await prompts.choice("\nWhich skill(s) should be installed?", opts, opts.length - 1);
+  const picked = await prompts.choice<StackKey>("\nWhich skill(s) should be installed?", opts, opts.length - 1);
   if (picked.key === "both") return ["frontend", "backend"];
   return [picked.key];
 }
 
-function micDropAndExit() {
+function micDropAndExit(): never {
   log("\nyour loss! mic drop. bye");
   prompts.close();
   process.exit(2);
 }
 
-async function runPatternDiscovery({ cwd, stacks, resolvedSkillDir, fe, be }) {
+interface RunPatternDiscoveryArgs {
+  cwd: string;
+  stacks: Stack[];
+  resolvedSkillDir: string;
+  fe: FrontendDetection | null;
+  be: ConfirmedBackend | null;
+}
+
+async function runPatternDiscovery(args: RunPatternDiscoveryArgs): Promise<void> {
+  const { cwd, stacks, resolvedSkillDir, fe, be } = args;
   log("\n── Pattern Discovery (required) ──");
   log("This scans your codebase using `claude` (read-only: Read/Glob/Grep)");
   log("to derive project-specific reference docs into the installed skill.");
@@ -84,11 +97,17 @@ async function runPatternDiscovery({ cwd, stacks, resolvedSkillDir, fe, be }) {
   const yes = await prompts.confirm("Run pattern discovery?", true);
   if (!yes) micDropAndExit();
 
+  const apps = fe
+    ? fe.apps.map((a) => ({ name: a.name, path: a.path }))
+    : be
+      ? [{ name: be.projectName, path: be.srcPath }]
+      : [];
+
   const result = await runDiscovery({
     stacks,
     projectRoot: cwd,
     skillDir: resolvedSkillDir,
-    apps: fe ? fe.apps : be ? [{ name: be.projectName, path: be.srcPath }] : [],
+    apps,
     log,
   });
 
@@ -115,7 +134,7 @@ async function runPatternDiscovery({ cwd, stacks, resolvedSkillDir, fe, be }) {
   log(`\nWrote ${derived.length}/${total} reference file(s) into ${resolvedSkillDir}/references/.`);
 }
 
-async function confirmFrontend(fe) {
+async function confirmFrontend(fe: FrontendDetection): Promise<FrontendDetection> {
   log("\n── Frontend detection ─────────────────────────");
   log(`Package manager: ${fe.packageManager}`);
   log(`Monorepo:        ${fe.monorepo ? fe.monorepoTool : "no (single-repo)"}`);
@@ -123,29 +142,34 @@ async function confirmFrontend(fe) {
   for (const a of fe.apps) {
     log(`  • ${a.name}  (${a.path})  port=${a.port}`);
   }
-  if (fe.apps.length > 1) {
+  let apps = fe.apps;
+  if (apps.length > 1) {
     log("\nDeselect any apps you do not want covered:");
-    fe.apps = await prompts.multiSelect(
+    apps = await prompts.multiSelect(
       "  (Enter to accept, or numbers to toggle)",
-      fe.apps,
+      apps as unknown as (AppEntry & prompts.SelectableItem)[],
       (a) => `${a.name} — ${a.path} :${a.port}`
-    );
+    ) as AppEntry[];
   }
-  return { ...fe, apps: fe.apps.filter((a) => a.selected !== false) };
+  return { ...fe, apps: apps.filter((a) => a.selected !== false) };
 }
 
-async function confirmBackend(be) {
+interface ConfirmedBackend extends BackendDetection {
+  commands: { test: string; build: string; lint: string };
+}
+
+async function confirmBackend(be: BackendDetection): Promise<ConfirmedBackend> {
   log("\n── Backend detection ─────────────────────────");
   log(`Solution:        ${be.solutionPath || "(none — using .csproj layout)"}`);
   log(`Project name:    ${be.projectName}`);
   log(`src/:            ${be.srcPath}`);
   log(`tests/:          ${be.testsPath || "(none)"}`);
   log(`csproj count:    ${be.csprojCount}`);
-  log(
-    `Migration tool:  ${be.migrationTool || "(not auto-detected)"}`
-  );
+  log(`Migration tool:  ${be.migrationTool || "(not auto-detected)"}`);
+
+  let migrationTool = be.migrationTool;
   if (be.needsMigrationToolPrompt) {
-    const picked = await prompts.choice(
+    const picked = await prompts.choice<"flyway" | "efcore" | "none">(
       "\nMigration tool?",
       [
         { key: "flyway", label: "Flyway" },
@@ -154,21 +178,45 @@ async function confirmBackend(be) {
       ],
       2
     );
-    be.migrationTool = picked.key;
+    migrationTool = picked.key === "none" ? null : picked.key;
   }
   const testCmd = await prompts.text("Test command", be.defaults.testCommand);
   const buildCmd = await prompts.text("Build command", be.defaults.buildCommand);
   const lintCmd = await prompts.text("Lint/format command", be.defaults.lintCommand);
   return {
     ...be,
+    migrationTool,
     commands: { test: testCmd, build: buildCmd, lint: lintCmd },
   };
 }
 
-async function gatherIntegrations(stacks) {
+interface JiraConfig {
+  enabled: boolean;
+  baseUrl?: string;
+  projectKey?: string;
+}
+interface SonarConfig {
+  enabled: boolean;
+  projectKey?: string;
+  frontendProjectKey?: string;
+  backendProjectKey?: string;
+}
+interface BrowserQAConfig {
+  enabled: boolean;
+  authStatePath?: string;
+}
+interface Integrations {
+  jira: JiraConfig;
+  sonar: SonarConfig;
+  hooks: boolean;
+  mcp: boolean;
+  browserQA: BrowserQAConfig;
+}
+
+async function gatherIntegrations(stacks: Stack[]): Promise<Integrations> {
   log("\n── Integrations ─────────────────────────");
   const jiraEnabled = await prompts.confirm("Enable Jira integration?", true);
-  let jira = { enabled: false };
+  let jira: JiraConfig = { enabled: false };
   if (jiraEnabled) {
     const baseUrl = await prompts.text("  Atlassian base URL", "https://yourco.atlassian.net");
     const projectKey = await prompts.text("  Jira project key", "PROJ");
@@ -176,7 +224,7 @@ async function gatherIntegrations(stacks) {
   }
 
   const sonarEnabled = await prompts.confirm("Enable SonarQube?", true);
-  let sonar = { enabled: false };
+  let sonar: SonarConfig = { enabled: false };
   if (sonarEnabled) {
     if (stacks.includes("frontend") && stacks.includes("backend")) {
       const fk = await prompts.text("  Frontend SonarQube project key", "yourco_frontend");
@@ -194,52 +242,44 @@ async function gatherIntegrations(stacks) {
   );
   const mcp = await prompts.confirm("Write .mcp.json.example at repo root?", true);
 
-  let browserQA = { enabled: false };
+  let browserQA: BrowserQAConfig = { enabled: false };
   if (stacks.includes("frontend")) {
-    const path = await prompts.text(
+    const authPath = await prompts.text(
       "  Browser QA auth state path (Inspector Clouseau)",
       "~/.agent-browser"
     );
-    browserQA = { enabled: true, authStatePath: path };
+    browserQA = { enabled: true, authStatePath: authPath };
   }
 
   return { jira, sonar, hooks, mcp, browserQA };
 }
 
-function frontendConfig(fe, integrations, projectName) {
-  const a = fe.apps[0] || {};
+function frontendConfig(fe: FrontendDetection, integrations: Integrations, projectName: string): Record<string, unknown> {
+  const a = fe.apps[0];
   return {
     project: { name: projectName, packageManager: fe.packageManager, monorepo: fe.monorepo },
     apps: fe.apps,
-    stack: a.stack || {},
+    stack: a?.stack || {},
     commands: {
-      build: a.buildCommand || "pnpm build",
-      test: a.testCommand || "pnpm test",
-      lint: a.lintCommand || "pnpm lint",
-      typecheck: a.typecheckCommand || "pnpm typecheck",
-      dev: a.devCommand || "pnpm dev",
+      build: a?.buildCommand || "pnpm build",
+      test: a?.testCommand || "pnpm test",
+      lint: a?.lintCommand || "pnpm lint",
+      typecheck: a?.typecheckCommand || "pnpm typecheck",
+      dev: a?.devCommand || "pnpm dev",
     },
     integrations: {
       jira: integrations.jira,
       sonar: integrations.sonar.enabled
-        ? {
-            enabled: true,
-            projectKey:
-              integrations.sonar.frontendProjectKey || integrations.sonar.projectKey,
-          }
+        ? { enabled: true, projectKey: integrations.sonar.frontendProjectKey || integrations.sonar.projectKey }
         : { enabled: false },
     },
     browserQA: integrations.browserQA,
   };
 }
 
-function backendConfig(be, integrations, projectName) {
+function backendConfig(be: ConfirmedBackend, integrations: Integrations, projectName: string): Record<string, unknown> {
   return {
-    project: {
-      name: projectName,
-      packageManager: "none",
-      monorepo: false,
-    },
+    project: { name: projectName, packageManager: "none", monorepo: false },
     apps: [],
     backend: {
       solutionPath: be.solutionPath,
@@ -250,22 +290,24 @@ function backendConfig(be, integrations, projectName) {
       migrationTool: be.migrationTool,
       commands: be.commands,
     },
-    commands: be.commands,
+    commands: {
+      test: be.commands.test,
+      build: be.commands.build,
+      lint: be.commands.lint,
+      typecheck: be.commands.build,
+      dev: "dotnet run",
+    },
     integrations: {
       jira: integrations.jira,
       sonar: integrations.sonar.enabled
-        ? {
-            enabled: true,
-            projectKey:
-              integrations.sonar.backendProjectKey || integrations.sonar.projectKey,
-          }
+        ? { enabled: true, projectKey: integrations.sonar.backendProjectKey || integrations.sonar.projectKey }
         : { enabled: false },
     },
     browserQA: { enabled: false },
   };
 }
 
-function postInstallMessage({ installed, deps }) {
+function postInstallMessage({ installed, deps }: { installed: string[]; deps: DepSummary | null }): void {
   log("\n──────────────────────────────────────────────");
   log("✔ Install complete.");
   for (const i of installed) log(`  • ${i}`);
@@ -287,7 +329,7 @@ function postInstallMessage({ installed, deps }) {
   log(`  • Try it: /implement-app or /implement-backend in Claude Code.`);
 }
 
-async function main() {
+async function main(): Promise<void> {
   const cwd = process.cwd();
   log("agent-bootstrap — drop a multi-agent orchestration skill into this project.");
   log(`cwd: ${cwd}`);
@@ -299,8 +341,8 @@ async function main() {
   const detection = detect(cwd);
   const stacks = await chooseStacks(detection);
 
-  let fe = null;
-  let be = null;
+  let fe: FrontendDetection | null = null;
+  let be: ConfirmedBackend | null = null;
   if (stacks.includes("frontend")) {
     if (!detection.frontend)
       abort("Frontend was selected but no React-style package.json was detected.");
@@ -314,7 +356,7 @@ async function main() {
   const integrations = await gatherIntegrations(stacks);
   const projectName = path.basename(cwd);
 
-  const installed = [];
+  const installed: string[] = [];
 
   if (fe) {
     const cfg = frontendConfig(fe, integrations, projectName);
@@ -325,28 +367,26 @@ async function main() {
         templateDir: path.join(TEMPLATES, "frontend", "implement-app"),
         skillName: "implement-app",
         config: cfg,
-        prompts,
         log,
       }),
       "implement-app"
     );
     installed.push(`.claude/skills/${mainResult.skillName}`);
 
-    // Pass 4 — Discovery runs after the kernel is in place, targeting the
-    // resolved skill dir (which may have been renamed via rename-on-conflict).
     await runPatternDiscovery({
       cwd,
       stacks: ["frontend"],
       resolvedSkillDir: mainResult.target,
       fe,
+      be: null,
     });
 
-    for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
+    for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"] as const) {
       const enabled =
         sub === "jira-tracking"
-          ? cfg.integrations.jira.enabled
+          ? cfg.integrations !== undefined && (cfg.integrations as { jira: { enabled: boolean } }).jira.enabled
           : sub === "sonar-fix"
-            ? cfg.integrations.sonar.enabled
+            ? (cfg.integrations as { sonar: { enabled: boolean } }).sonar.enabled
             : true;
       if (!enabled) continue;
       const r = abortOnInstallFailure(
@@ -355,7 +395,6 @@ async function main() {
           templateDir: path.join(TEMPLATES, "shared", sub),
           skillName: sub,
           config: cfg,
-          prompts,
           log,
         }),
         sub
@@ -373,30 +412,27 @@ async function main() {
         templateDir: path.join(TEMPLATES, "backend", "implement-backend"),
         skillName: "implement-backend",
         config: cfg,
-        prompts,
         log,
       }),
       "implement-backend"
     );
     installed.push(`.claude/skills/${mainResult.skillName}`);
 
-    // Pass 4 — Discovery runs after the kernel is in place, targeting the
-    // resolved skill dir (which may have been renamed via rename-on-conflict).
     await runPatternDiscovery({
       cwd,
       stacks: ["backend"],
       resolvedSkillDir: mainResult.target,
+      fe: null,
       be,
     });
 
     if (!fe) {
-      // shared support skills (only install once if both stacks selected)
-      for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
+      for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"] as const) {
         const enabled =
           sub === "jira-tracking"
-            ? cfg.integrations.jira.enabled
+            ? (cfg.integrations as { jira: { enabled: boolean } }).jira.enabled
             : sub === "sonar-fix"
-              ? cfg.integrations.sonar.enabled
+              ? (cfg.integrations as { sonar: { enabled: boolean } }).sonar.enabled
               : true;
         if (!enabled) continue;
         const r = abortOnInstallFailure(
@@ -405,7 +441,6 @@ async function main() {
             templateDir: path.join(TEMPLATES, "shared", sub),
             skillName: sub,
             config: cfg,
-            prompts,
             log,
           }),
           sub
@@ -437,15 +472,7 @@ async function main() {
     installed.push(".mcp.json.example");
   }
 
-  // Real post-install: run npx skills add / npm i -g / cp .mcp.json
-  // instead of just printing the commands as next steps.
-  const deps = await installDependencies({
-    stacks,
-    projectRoot: cwd,
-    prompts,
-    log,
-    err,
-  });
+  const deps = await installDependencies({ stacks, projectRoot: cwd, log, err });
 
   postInstallMessage({ installed, deps });
   prompts.close();
@@ -453,9 +480,9 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((e) => {
+  .catch((e: Error) => {
     err(`\nFailed: ${e.message || e}`);
-    if (process.env.DEBUG) err(e.stack);
+    if (process.env.DEBUG) err(String(e.stack));
     prompts.close();
     process.exit(1);
   });

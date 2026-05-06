@@ -1,24 +1,26 @@
 {
   "name": "agent-bootstrap",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Bootstrap a project-tailored multi-agent orchestration skill into any React or C# project.",
   "bin": {
-    "agent-bootstrap": "bin/bootstrap.js"
+    "agent-bootstrap": "dist/bin/bootstrap.js"
   },
-  "main": "bin/bootstrap.js",
+  "main": "dist/bin/bootstrap.js",
   "files": [
-    "bin/",
-    "lib/",
+    "dist/",
     "templates/",
     "README.md",
     "docs/templating.md"
   ],
   "scripts": {
-    "start":                "node bin/bootstrap.js",
-    "lint:templates":       "node lib/template-lint.js",
-    "test:snapshot":        "node tests/snapshot.js",
-    "test:snapshot:update": "node tests/snapshot.js --update",
-    "test":                 "npm run lint:templates && npm run test:snapshot"
+    "build": "tsc && node scripts/postbuild.js",
+    "prepare": "npm run build",
+    "start": "npm run build && node dist/bin/bootstrap.js",
+    "lint:templates": "npm run build && node dist/lib/template-lint.js",
+    "test:snapshot": "npm run build && node tests/snapshot.js",
+    "test:snapshot:update": "npm run build && node tests/snapshot.js --update",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run lint:templates && npm run test:snapshot"
   },
   "engines": {
     "node": ">=18"
@@ -37,6 +39,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sidzan/agent-bootstrap.git"
+    "url": "https://github.com/sidzan/agent-orchestrator.git"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
   }
 }

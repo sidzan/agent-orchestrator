@@ -1,12 +1,15 @@
-"use strict";
+import * as fs from "fs";
+import * as path from "path";
+import { spawnSync } from "child_process";
 
-const fs = require("fs");
-const path = require("path");
-const { spawnSync } = require("child_process");
-const DISCOVERY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const TEXT_EXTENSIONS = [".md", ".tsx", ".ts", ".cs", ".sql", ".sh"];
+const DISCOVERY_TIMEOUT_MS = 5 * 60 * 1000;
 
-const FRONTEND_DISCOVERIES = [
+export interface DiscoveryEntry {
+  filename: string;
+  instruction: string;
+}
+
+export const FRONTEND_DISCOVERIES: readonly DiscoveryEntry[] = [
   {
     filename: "patterns/list-pages.md",
     instruction:
@@ -49,7 +52,7 @@ const FRONTEND_DISCOVERIES = [
   },
 ];
 
-const BACKEND_DISCOVERIES = [
+export const BACKEND_DISCOVERIES: readonly DiscoveryEntry[] = [
   {
     filename: "patterns/handlers.md",
     instruction:
@@ -77,12 +80,19 @@ const BACKEND_DISCOVERIES = [
   },
 ];
 
-function checkClaudeInstalled() {
+export function checkClaudeInstalled(): boolean {
   const r = spawnSync("claude", ["--version"], { encoding: "utf8" });
   return r.status === 0;
 }
 
-function buildPrompt({ entries, cwd, stack, apps }) {
+export interface BuildPromptArgs {
+  entries: readonly DiscoveryEntry[];
+  cwd: string;
+  stack: string | string[];
+  apps: { name: string; path: string }[];
+}
+
+export function buildPrompt({ entries, cwd, stack, apps }: BuildPromptArgs): string {
   const sections = entries
     .map((e) => `[${e.filename}]\n${e.instruction}`)
     .join("\n\n");
@@ -115,33 +125,28 @@ function buildPrompt({ entries, cwd, stack, apps }) {
   ].join("\n");
 }
 
-function tryParseEnvelope(stdout) {
-  // `claude -p --output-format json` wraps the response in an envelope.
-  // We accept either:
-  //   - Direct JSON section map (older versions)
-  //   - { result: "<assistant text>" } envelope
-  //   - { messages: [{ content: "..." }] } shape
-  let parsed;
+export type EnvelopeResult = { ok: true; text: string } | { ok: false; reason: string };
+
+export function tryParseEnvelope(stdout: string): EnvelopeResult {
+  let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch {
     return { ok: false, reason: "envelope-not-json" };
   }
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    if (typeof parsed.result === "string") return { ok: true, text: parsed.result };
-    if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
-      const last = parsed.messages[parsed.messages.length - 1];
+    const obj = parsed as Record<string, unknown>;
+    if (typeof obj.result === "string") return { ok: true, text: obj.result };
+    if (Array.isArray(obj.messages) && obj.messages.length > 0) {
+      const last = obj.messages[obj.messages.length - 1] as { content?: unknown };
       if (last && typeof last.content === "string") return { ok: true, text: last.content };
     }
-    // Could already be the section map
     return { ok: true, text: JSON.stringify(parsed) };
   }
   return { ok: false, reason: "envelope-shape-unexpected" };
 }
 
-function extractJsonObject(text) {
-  // Strip code fences, leading/trailing prose. Find the first `{` and the
-  // matching `}` by depth-counting (string-aware).
+export function extractJsonObject(text: string): string | null {
   const start = text.indexOf("{");
   if (start === -1) return null;
   let depth = 0;
@@ -149,18 +154,9 @@ function extractJsonObject(text) {
   let escape = false;
   for (let i = start; i < text.length; i += 1) {
     const ch = text[i];
-    if (escape) {
-      escape = false;
-      continue;
-    }
-    if (ch === "\\") {
-      escape = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
     if (inString) continue;
     if (ch === "{") depth += 1;
     else if (ch === "}") {
@@ -171,10 +167,13 @@ function extractJsonObject(text) {
   return null;
 }
 
-function parseSectionMap(text, expectedIds) {
+export type SectionMap = Record<string, string>;
+export type SectionMapResult = { ok: true; map: SectionMap } | { ok: false; reason: string };
+
+export function parseSectionMap(text: string, expectedIds: string[]): SectionMapResult {
   const jsonStr = extractJsonObject(text);
   if (!jsonStr) return { ok: false, reason: "no-json-object-found" };
-  let map;
+  let map: unknown;
   try {
     map = JSON.parse(jsonStr);
   } catch {
@@ -183,18 +182,24 @@ function parseSectionMap(text, expectedIds) {
   if (!map || typeof map !== "object" || Array.isArray(map)) {
     return { ok: false, reason: "section-map-not-object" };
   }
-  // Coerce all values to strings (undefined → "FALLBACK")
-  const clean = {};
+  const obj = map as Record<string, unknown>;
+  const clean: SectionMap = {};
   for (const id of expectedIds) {
-    const v = map[id];
-    if (typeof v === "string") clean[id] = v;
-    else clean[id] = "FALLBACK";
+    const v = obj[id];
+    clean[id] = typeof v === "string" ? v : "FALLBACK";
   }
   return { ok: true, map: clean };
 }
 
-function spawnClaude(prompt, log) {
-  log && log("Running claude (read-only). This may take 30–90 seconds…");
+interface SpawnResult {
+  ok: boolean;
+  reason?: string;
+  stderr?: string;
+  stdout?: string;
+}
+
+function spawnClaude(prompt: string, log?: (msg: string) => void): SpawnResult {
+  log?.("Running claude (read-only). This may take 30–90 seconds…");
   const args = [
     "-p",
     prompt,
@@ -218,23 +223,25 @@ function spawnClaude(prompt, log) {
   return { ok: true, stdout: r.stdout || "" };
 }
 
-function writeDebugLog(projectRoot, stdout, stderr) {
+function writeDebugLog(projectRoot: string, stdout: string, stderr: string): string | null {
   try {
     fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
     const logPath = path.join(projectRoot, ".claude", "agent-bootstrap-discovery.log");
-    fs.writeFileSync(
-      logPath,
-      `--- stdout ---\n${stdout || ""}\n--- stderr ---\n${stderr || ""}\n`
-    );
+    fs.writeFileSync(logPath, `--- stdout ---\n${stdout || ""}\n--- stderr ---\n${stderr || ""}\n`);
     return logPath;
   } catch {
     return null;
   }
 }
 
-function writeDerivedReferences(skillDir, map) {
-  const written = [];
-  const fallback = [];
+export interface DerivedReferencesResult {
+  written: string[];
+  fallback: string[];
+}
+
+export function writeDerivedReferences(skillDir: string, map: SectionMap): DerivedReferencesResult {
+  const written: string[] = [];
+  const fallback: string[] = [];
   const referencesDir = path.join(skillDir, "references");
   for (const [filename, value] of Object.entries(map)) {
     if (typeof value !== "string" || value === "FALLBACK" || value.trim() === "") {
@@ -249,33 +256,46 @@ function writeDerivedReferences(skillDir, map) {
   return { written, fallback };
 }
 
-async function runDiscovery({ stacks, projectRoot, skillDir, apps, log }) {
+export interface RunDiscoveryArgs {
+  stacks: string[];
+  projectRoot: string;
+  skillDir: string;
+  apps: { name: string; path: string }[];
+  log?: (msg: string) => void;
+}
+
+export type RunDiscoveryResult =
+  | { ok: true; written: string[]; fallback: string[]; total: number }
+  | { ok: false; reason: string; logPath?: string | null; stderr?: string };
+
+export async function runDiscovery(args: RunDiscoveryArgs): Promise<RunDiscoveryResult> {
+  const { stacks, projectRoot, skillDir, apps, log } = args;
   if (!checkClaudeInstalled()) return { ok: false, reason: "no-claude" };
 
-  const entries = [];
+  const entries: DiscoveryEntry[] = [];
   if (stacks.includes("frontend")) entries.push(...FRONTEND_DISCOVERIES);
   if (stacks.includes("backend")) entries.push(...BACKEND_DISCOVERIES);
   if (entries.length === 0) return { ok: false, reason: "no-entries" };
 
-  log && log(`Will derive up to ${entries.length} reference file(s).`);
+  log?.(`Will derive up to ${entries.length} reference file(s).`);
 
   const prompt = buildPrompt({ entries, cwd: projectRoot, stack: stacks, apps });
   const spawned = spawnClaude(prompt, log);
   if (!spawned.ok) {
     const logPath = writeDebugLog(projectRoot, spawned.stdout || "", spawned.stderr || "");
-    return { ok: false, reason: spawned.reason, logPath, stderr: spawned.stderr };
+    return { ok: false, reason: spawned.reason || "spawn-failed", logPath, stderr: spawned.stderr };
   }
 
-  const env = tryParseEnvelope(spawned.stdout);
+  const env = tryParseEnvelope(spawned.stdout || "");
   if (!env.ok) {
-    const logPath = writeDebugLog(projectRoot, spawned.stdout, "");
+    const logPath = writeDebugLog(projectRoot, spawned.stdout || "", "");
     return { ok: false, reason: env.reason, logPath };
   }
 
   const expectedIds = entries.map((e) => e.filename);
   const parsed = parseSectionMap(env.text, expectedIds);
   if (!parsed.ok) {
-    const logPath = writeDebugLog(projectRoot, spawned.stdout, env.text);
+    const logPath = writeDebugLog(projectRoot, spawned.stdout || "", env.text);
     return { ok: false, reason: parsed.reason, logPath };
   }
 
@@ -283,23 +303,17 @@ async function runDiscovery({ stacks, projectRoot, skillDir, apps, log }) {
   return { ok: true, written, fallback, total: entries.length };
 }
 
-function summarize(result) {
+export interface SummarizeResult {
+  derived: string[];
+  fallback: string[];
+  total: number;
+}
+
+export function summarize(result: RunDiscoveryResult): SummarizeResult {
+  if (!result.ok) return { derived: [], fallback: [], total: 0 };
   return {
     derived: result.written || [],
     fallback: result.fallback || [],
     total: result.total || 0,
   };
 }
-
-module.exports = {
-  runDiscovery,
-  checkClaudeInstalled,
-  buildPrompt,
-  parseSectionMap,
-  tryParseEnvelope,
-  extractJsonObject,
-  writeDerivedReferences,
-  summarize,
-  FRONTEND_DISCOVERIES,
-  BACKEND_DISCOVERIES,
-};

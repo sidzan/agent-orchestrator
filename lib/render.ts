@@ -1,55 +1,59 @@
-"use strict";
-
-/**
- * In-memory template renderer with schema validation and render-time audit.
- *
- * Two entry points:
- *   renderTree(templateDir, config, options) → { ok, files, errors }
- *   renderFile(text, config, options)        → { ok, content, errors }
- *
- * The renderer never writes to disk. Callers (lib/install.js) write atomically
- * after auditing the full in-memory tree.
- *
- * Render passes:
- *   1. Validate `config` against the declared schema (lib/schema.js).
- *   2. For each file, run conditional blocks ({{#if x}}...{{/if}}, with
- *      optional {{#else}} branch).
- *   3. Substitute value markers ({{CONFIG.x.y}}).
- *   4. Audit each rendered file:
- *      - leftover {{ or }} → marker rendering bug → fail
- *      - <UNSET:...> sentinel → unresolved required path → fail
- *
- * Binary files (non-text) are passed through unchanged.
- */
-
-const fs = require("fs");
-const path = require("path");
-const { SCHEMA, validate, resolveMarker, isDeclared } = require("./schema");
+import * as fs from "fs";
+import * as path from "path";
+import { SCHEMA, FieldDecl, validate, resolveMarker, isDeclared, ValidationError } from "./schema";
 
 const VALUE_RE = /\{\{\s*(CONFIG(?:\.[\w$]+|\[\d+\])+)\s*\}\}/g;
 const IF_OPEN_RE = /\{\{\s*#if\s+(CONFIG(?:\.[\w$]+|\[\d+\])+)\s*\}\}/;
 const IF_CLOSE = "{{/if}}";
 const ELSE_TAG = "{{#else}}";
 
-const TEXT_EXTS = new Set([".md", ".sh", ".tsx", ".ts", ".js", ".jsx", ".cs", ".sql", ".yml", ".yaml", ".json", ".example", ".txt"]);
+const TEXT_EXTS = new Set([
+  ".md", ".sh", ".tsx", ".ts", ".js", ".jsx", ".cs", ".sql",
+  ".yml", ".yaml", ".json", ".example", ".txt",
+]);
 
-function isTextFile(filePath) {
+export function isTextFile(filePath: string): boolean {
   if (TEXT_EXTS.has(path.extname(filePath))) return true;
   const base = path.basename(filePath);
   if (base.startsWith(".") || !base.includes(".")) return true;
   return false;
 }
 
-class RenderError extends Error {
-  constructor(message, errors) {
+export type RenderErrorKind =
+  | "config-validation"
+  | "missing"
+  | "type"
+  | "unknown-marker"
+  | "unresolved-marker"
+  | "leftover-marker"
+  | "unset-sentinel"
+  | "undeclared-marker"
+  | "unmatched-if"
+  | "write";
+
+export interface RenderIssue {
+  kind: RenderErrorKind;
+  file?: string;
+  path?: string;
+  message: string;
+}
+
+export class RenderError extends Error {
+  errors: RenderIssue[];
+  constructor(message: string, errors: RenderIssue[]) {
     super(message);
-    this.errors = errors || [];
+    this.errors = errors;
   }
 }
 
 // ── Conditional rendering ──────────────────────────────────────────────────
 
-function findMatchingClose(text, startIdx) {
+interface CloseInfo {
+  closeIdx: number;
+  elseIdx: number;
+}
+
+function findMatchingClose(text: string, startIdx: number): CloseInfo {
   let i = startIdx;
   let depth = 1;
   let elseIdx = -1;
@@ -59,9 +63,9 @@ function findMatchingClose(text, startIdx) {
     const nextElse = text.indexOf(ELSE_TAG, i);
     if (nextClose === -1) return { closeIdx: -1, elseIdx: -1 };
     const candidates = [
-      { type: "open",  idx: nextOpen },
+      { type: "open", idx: nextOpen },
       { type: "close", idx: nextClose },
-      { type: "else",  idx: nextElse },
+      { type: "else", idx: nextElse },
     ].filter((c) => c.idx !== -1);
     candidates.sort((a, b) => a.idx - b.idx);
     const next = candidates[0];
@@ -80,13 +84,13 @@ function findMatchingClose(text, startIdx) {
   return { closeIdx: -1, elseIdx: -1 };
 }
 
-function renderConditionals(text, config, errors) {
+function renderConditionals(text: string, config: unknown, errors: RenderIssue[]): string {
   let out = "";
   let i = 0;
   while (i < text.length) {
     const rest = text.slice(i);
     const m = rest.match(IF_OPEN_RE);
-    if (!m) {
+    if (!m || m.index === undefined) {
       out += rest;
       break;
     }
@@ -99,7 +103,7 @@ function renderConditionals(text, config, errors) {
       out += rest.slice(m.index);
       break;
     }
-    const ifBody  = elseIdx !== -1 ? text.slice(afterOpen, elseIdx) : text.slice(afterOpen, closeIdx);
+    const ifBody = elseIdx !== -1 ? text.slice(afterOpen, elseIdx) : text.slice(afterOpen, closeIdx);
     const elseBody = elseIdx !== -1 ? text.slice(elseIdx + ELSE_TAG.length, closeIdx) : "";
     const value = resolveMarker(config, expr);
     const branch = value ? ifBody : elseBody;
@@ -111,8 +115,7 @@ function renderConditionals(text, config, errors) {
 
 // ── Value substitution ─────────────────────────────────────────────────────
 
-/** Schema lookup for a marker's declaration, accounting for array-item paths. */
-function declarationFor(markerPath) {
+function declarationFor(markerPath: string): FieldDecl | null {
   const direct = markerPath.replace(/^CONFIG\.?/, "").replace(/\[\d+\]/g, "");
   if (SCHEMA[direct]) return SCHEMA[direct];
   const arr = markerPath.match(/^CONFIG\.([\w$]+)\[\d+\]\.(.+)$/);
@@ -127,22 +130,18 @@ function declarationFor(markerPath) {
   return null;
 }
 
-function renderValues(text, config, errors) {
-  return text.replace(VALUE_RE, (_, expr) => {
+function renderValues(text: string, config: unknown, errors: RenderIssue[]): string {
+  return text.replace(VALUE_RE, (_match: string, expr: string) => {
     if (!isDeclared(expr)) {
-      errors.push({ kind: "unknown-marker", message: `Unknown CONFIG path: {{${expr}}} — declare it in lib/schema.js` });
+      errors.push({ kind: "unknown-marker", message: `Unknown CONFIG path: {{${expr}}} — declare it in lib/schema.ts` });
       return `<UNDECLARED:${expr}>`;
     }
     const value = resolveMarker(config, expr);
     if (value === undefined || value === null) {
-      // Gated-optional path: if its `requiredWhen` is false, this is an
-      // intentionally-disabled integration. Substitute a visible placeholder
-      // so the user can grep for "(disabled" later, but don't fail audit.
       const decl = declarationFor(expr);
       if (decl && decl.requiredWhen) {
         const gate = resolveMarker(config, "CONFIG." + decl.requiredWhen);
         if (!gate) {
-          // Derive a friendly placeholder from the integration name
           const m = expr.match(/CONFIG\.([\w]+\.[\w]+)\./);
           const intName = m ? m[1].split(".")[1] : "integration";
           return `(${intName}-disabled)`;
@@ -157,7 +156,7 @@ function renderValues(text, config, errors) {
 
 // ── Audit ──────────────────────────────────────────────────────────────────
 
-function auditRendered(content, relativePath, errors) {
+function auditRendered(content: string, relativePath: string, errors: RenderIssue[]): void {
   const m = content.match(/\{\{[^}]*\}\}/);
   if (m) {
     errors.push({
@@ -179,21 +178,38 @@ function auditRendered(content, relativePath, errors) {
     errors.push({
       kind: "undeclared-marker",
       file: relativePath,
-      message: `<UNDECLARED> sentinel rendered: ${undecl[0]} — template references a CONFIG path not in lib/schema.js`,
+      message: `<UNDECLARED> sentinel rendered: ${undecl[0]} — template references a CONFIG path not in lib/schema.ts`,
     });
   }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-function renderFile(text, config, options = {}) {
-  const errors = [];
+export interface RenderFileOptions {
+  skipValidation?: boolean;
+  relativePath?: string;
+}
+
+export interface RenderFileResult {
+  ok: boolean;
+  content: string | null;
+  errors: RenderIssue[];
+}
+
+export function renderFile(text: string, config: unknown, options: RenderFileOptions = {}): RenderFileResult {
+  const errors: RenderIssue[] = [];
   const skipValidation = options.skipValidation === true;
   const relativePath = options.relativePath || "<inline>";
 
   if (!skipValidation) {
     const v = validate(config);
-    if (!v.ok) return { ok: false, content: null, errors: v.errors.map((e) => ({ ...e, file: relativePath })) };
+    if (!v.ok) {
+      return {
+        ok: false,
+        content: null,
+        errors: v.errors.map((e: ValidationError) => ({ ...e, file: relativePath, kind: e.kind as RenderErrorKind })),
+      };
+    }
   }
 
   const afterIfs = renderConditionals(text, config, errors);
@@ -207,7 +223,12 @@ function renderFile(text, config, options = {}) {
   };
 }
 
-function walkTree(dir, base = dir, out = []) {
+interface SourceEntry {
+  absolutePath: string;
+  relativePath: string;
+}
+
+function walkTree(dir: string, base = dir, out: SourceEntry[] = []): SourceEntry[] {
   if (!fs.existsSync(dir)) return out;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
@@ -223,14 +244,30 @@ function walkTree(dir, base = dir, out = []) {
   return out;
 }
 
-function renderTree(templateDir, config, options = {}) {
+export interface RenderedFile {
+  relativePath: string;
+  content: string | Buffer;
+  mode: "text" | "binary";
+}
+
+export interface RenderTreeResult {
+  ok: boolean;
+  files: RenderedFile[];
+  errors: RenderIssue[];
+}
+
+export function renderTree(templateDir: string, config: unknown): RenderTreeResult {
   const v = validate(config);
   if (!v.ok) {
-    return { ok: false, files: [], errors: v.errors.map((e) => ({ ...e, kind: "config-validation" })) };
+    return {
+      ok: false,
+      files: [],
+      errors: v.errors.map((e: ValidationError) => ({ ...e, kind: "config-validation" as RenderErrorKind })),
+    };
   }
 
-  const files = [];
-  const errors = [];
+  const files: RenderedFile[] = [];
+  const errors: RenderIssue[] = [];
   const sources = walkTree(templateDir);
 
   for (const f of sources) {
@@ -241,50 +278,38 @@ function renderTree(templateDir, config, options = {}) {
         errors.push(...r.errors.map((e) => ({ ...e, file: e.file || f.relativePath })));
         continue;
       }
-      files.push({ relativePath: f.relativePath, content: r.content, mode: "text" });
+      files.push({ relativePath: f.relativePath, content: r.content!, mode: "text" });
     } else {
-      // Binary — pass through
       const buf = fs.readFileSync(f.absolutePath);
       files.push({ relativePath: f.relativePath, content: buf, mode: "binary" });
     }
   }
 
-  return {
-    ok: errors.length === 0,
-    files,
-    errors,
-  };
+  return { ok: errors.length === 0, files, errors };
+}
+
+export interface WriteTreeResult {
+  ok: boolean;
+  written: string[];
+  error?: Error;
 }
 
 /** Atomically write a rendered tree under destDir. Rolls back on failure. */
-function writeTree(destDir, files) {
-  const written = [];
+export function writeTree(destDir: string, files: RenderedFile[]): WriteTreeResult {
+  const written: string[] = [];
   try {
     fs.mkdirSync(destDir, { recursive: true });
     for (const f of files) {
       const dest = path.join(destDir, f.relativePath);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      if (f.mode === "binary") {
-        fs.writeFileSync(dest, f.content);
-      } else {
-        fs.writeFileSync(dest, f.content);
-      }
+      fs.writeFileSync(dest, f.content);
       written.push(dest);
     }
     return { ok: true, written };
   } catch (e) {
-    // Roll back what we just wrote
     for (const w of written) {
-      try { fs.unlinkSync(w); } catch {}
+      try { fs.unlinkSync(w); } catch { /* ignore */ }
     }
-    return { ok: false, error: e, written: [] };
+    return { ok: false, error: e as Error, written: [] };
   }
 }
-
-module.exports = {
-  renderFile,
-  renderTree,
-  writeTree,
-  RenderError,
-  isTextFile,
-};

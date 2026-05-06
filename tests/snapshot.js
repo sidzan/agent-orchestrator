@@ -15,7 +15,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { renderTree } = require("../lib/render");
+const { renderTree } = require("../dist/lib/render");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const FIX_DIR = path.join(__dirname, "fixtures");
