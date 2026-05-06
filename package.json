@@ -1,0 +1,37 @@
+{
+  "name": "agent-bootstrap",
+  "version": "0.1.0",
+  "description": "Bootstrap a project-tailored multi-agent orchestration skill into any React or C# project.",
+  "bin": {
+    "agent-bootstrap": "bin/bootstrap.js"
+  },
+  "main": "bin/bootstrap.js",
+  "files": [
+    "bin/",
+    "lib/",
+    "templates/",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node bin/bootstrap.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "skill",
+    "agent",
+    "orchestration",
+    "react",
+    "csharp",
+    "scaffold"
+  ],
+  "author": "sidzan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sidzan/agent-bootstrap.git"
+  }
+}

@@ -1,0 +1,341 @@
+#!/usr/bin/env node
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const { detect } = require("../lib/detect");
+const prompts = require("../lib/prompts");
+const { installSkill, installHooks, installMcp } = require("../lib/install");
+
+const log = (msg) => process.stdout.write(`${msg}\n`);
+const err = (msg) => process.stderr.write(`${msg}\n`);
+
+const PACKAGE_ROOT = path.resolve(__dirname, "..");
+const TEMPLATES = path.join(PACKAGE_ROOT, "templates");
+
+function abort(message, code = 1) {
+  err(`\n✖ ${message}`);
+  process.exit(code);
+}
+
+function isProjectRoot(cwd) {
+  return (
+    fs.existsSync(path.join(cwd, "package.json")) ||
+    fs.readdirSync(cwd).some((f) => f.endsWith(".sln") || f.endsWith(".csproj"))
+  );
+}
+
+async function chooseStacks(detection) {
+  const opts = [];
+  if (detection.frontend) opts.push({ key: "frontend", label: "Frontend (React)" });
+  if (detection.backend) opts.push({ key: "backend", label: "Backend (C#)" });
+  if (detection.frontend && detection.backend)
+    opts.push({ key: "both", label: "Both (frontend + backend)" });
+
+  if (opts.length === 0) {
+    abort(
+      "agent-bootstrap supports React and C# projects only. " +
+        "No React deps found in package.json and no *.sln / *.csproj detected."
+    );
+  }
+
+  if (opts.length === 1) {
+    log(`\nDetected stack: ${opts[0].label}`);
+    return opts[0].key === "frontend" ? ["frontend"] : ["backend"];
+  }
+
+  const picked = await prompts.choice("\nWhich skill(s) should be installed?", opts, opts.length - 1);
+  if (picked.key === "both") return ["frontend", "backend"];
+  return [picked.key];
+}
+
+async function confirmFrontend(fe) {
+  log("\n── Frontend detection ─────────────────────────");
+  log(`Package manager: ${fe.packageManager}`);
+  log(`Monorepo:        ${fe.monorepo ? fe.monorepoTool : "no (single-repo)"}`);
+  log(`Apps detected:   ${fe.apps.length}`);
+  for (const a of fe.apps) {
+    log(`  • ${a.name}  (${a.path})  port=${a.port}`);
+  }
+  if (fe.apps.length > 1) {
+    log("\nDeselect any apps you do not want covered:");
+    fe.apps = await prompts.multiSelect(
+      "  (Enter to accept, or numbers to toggle)",
+      fe.apps,
+      (a) => `${a.name} — ${a.path} :${a.port}`
+    );
+  }
+  return { ...fe, apps: fe.apps.filter((a) => a.selected !== false) };
+}
+
+async function confirmBackend(be) {
+  log("\n── Backend detection ─────────────────────────");
+  log(`Solution:        ${be.solutionPath || "(none — using .csproj layout)"}`);
+  log(`Project name:    ${be.projectName}`);
+  log(`src/:            ${be.srcPath}`);
+  log(`tests/:          ${be.testsPath || "(none)"}`);
+  log(`csproj count:    ${be.csprojCount}`);
+  log(
+    `Migration tool:  ${be.migrationTool || "(not auto-detected)"}`
+  );
+  if (be.needsMigrationToolPrompt) {
+    const picked = await prompts.choice(
+      "\nMigration tool?",
+      [
+        { key: "flyway", label: "Flyway" },
+        { key: "efcore", label: "Entity Framework Core" },
+        { key: "none", label: "None / other" },
+      ],
+      2
+    );
+    be.migrationTool = picked.key;
+  }
+  const testCmd = await prompts.text("Test command", be.defaults.testCommand);
+  const buildCmd = await prompts.text("Build command", be.defaults.buildCommand);
+  const lintCmd = await prompts.text("Lint/format command", be.defaults.lintCommand);
+  return {
+    ...be,
+    commands: { test: testCmd, build: buildCmd, lint: lintCmd },
+  };
+}
+
+async function gatherIntegrations(stacks) {
+  log("\n── Integrations ─────────────────────────");
+  const jiraEnabled = await prompts.confirm("Enable Jira integration?", true);
+  let jira = { enabled: false };
+  if (jiraEnabled) {
+    const baseUrl = await prompts.text("  Atlassian base URL", "https://yourco.atlassian.net");
+    const projectKey = await prompts.text("  Jira project key", "PROJ");
+    jira = { enabled: true, baseUrl, projectKey };
+  }
+
+  const sonarEnabled = await prompts.confirm("Enable SonarQube?", true);
+  let sonar = { enabled: false };
+  if (sonarEnabled) {
+    if (stacks.includes("frontend") && stacks.includes("backend")) {
+      const fk = await prompts.text("  Frontend SonarQube project key", "yourco_frontend");
+      const bk = await prompts.text("  Backend SonarQube project key", "yourco_backend");
+      sonar = { enabled: true, frontendProjectKey: fk, backendProjectKey: bk };
+    } else {
+      const k = await prompts.text("  SonarQube project key", "yourco_project");
+      sonar = { enabled: true, projectKey: k };
+    }
+  }
+
+  const hooks = await prompts.confirm(
+    "Install recommended hooks (lint-on-save, worktree-setup, enforce-task-update)?",
+    true
+  );
+  const mcp = await prompts.confirm("Write .mcp.json.example at repo root?", true);
+
+  let browserQA = { enabled: false };
+  if (stacks.includes("frontend")) {
+    const path = await prompts.text(
+      "  Browser QA auth state path (Inspector Clouseau)",
+      "~/.agent-browser"
+    );
+    browserQA = { enabled: true, authStatePath: path };
+  }
+
+  return { jira, sonar, hooks, mcp, browserQA };
+}
+
+function frontendConfig(fe, integrations, projectName) {
+  const a = fe.apps[0] || {};
+  return {
+    project: { name: projectName, packageManager: fe.packageManager, monorepo: fe.monorepo },
+    apps: fe.apps,
+    stack: a.stack || {},
+    commands: {
+      build: a.buildCommand || "pnpm build",
+      test: a.testCommand || "pnpm test",
+      lint: a.lintCommand || "pnpm lint",
+      typecheck: a.typecheckCommand || "pnpm typecheck",
+      dev: a.devCommand || "pnpm dev",
+    },
+    integrations: {
+      jira: integrations.jira,
+      sonar: integrations.sonar.enabled
+        ? {
+            enabled: true,
+            projectKey:
+              integrations.sonar.frontendProjectKey || integrations.sonar.projectKey,
+          }
+        : { enabled: false },
+    },
+    browserQA: integrations.browserQA,
+  };
+}
+
+function backendConfig(be, integrations, projectName) {
+  return {
+    project: { name: projectName },
+    backend: {
+      solutionPath: be.solutionPath,
+      projectName: be.projectName,
+      srcPath: be.srcPath,
+      testsPath: be.testsPath,
+      migrationTool: be.migrationTool,
+      commands: be.commands,
+    },
+    commands: be.commands,
+    integrations: {
+      jira: integrations.jira,
+      sonar: integrations.sonar.enabled
+        ? {
+            enabled: true,
+            projectKey:
+              integrations.sonar.backendProjectKey || integrations.sonar.projectKey,
+          }
+        : { enabled: false },
+    },
+  };
+}
+
+function postInstallMessage({ stacks, integrations, installed }) {
+  log("\n──────────────────────────────────────────────");
+  log("✔ Install complete.");
+  for (const i of installed) log(`  • ${i}`);
+  log("\nNext steps:");
+  let n = 1;
+  if (stacks.includes("frontend")) {
+    log(`  ${n++}. Install agent-browser skill:  npx skills add vercel-labs/agent-browser`);
+    log(`  ${n++}. Install agent-browser CLI:    npm i -g agent-browser`);
+  }
+  if (integrations.mcp) {
+    log(`  ${n++}. Configure MCP:                cp .mcp.json.example .mcp.json (fill in secrets)`);
+  }
+  log(`  ${n++}. Edit EDIT-ME starter references in .claude/skills/*/references/ to match your stack`);
+  log(`  ${n++}. Try it:                       /implement-app or /implement-backend in Claude Code`);
+}
+
+async function main() {
+  const cwd = process.cwd();
+  log("agent-bootstrap — drop a multi-agent orchestration skill into this project.");
+  log(`cwd: ${cwd}`);
+
+  if (!isProjectRoot(cwd)) {
+    abort("Not a project directory. Run this from the project root (needs package.json or *.sln/*.csproj).");
+  }
+
+  const detection = detect(cwd);
+  const stacks = await chooseStacks(detection);
+
+  let fe = null;
+  let be = null;
+  if (stacks.includes("frontend")) {
+    if (!detection.frontend)
+      abort("Frontend was selected but no React-style package.json was detected.");
+    fe = await confirmFrontend(detection.frontend);
+  }
+  if (stacks.includes("backend")) {
+    if (!detection.backend) abort("Backend was selected but no .sln / .csproj was detected.");
+    be = await confirmBackend(detection.backend);
+  }
+
+  const integrations = await gatherIntegrations(stacks);
+  const projectName = path.basename(cwd);
+
+  const installed = [];
+
+  if (fe) {
+    const cfg = frontendConfig(fe, integrations, projectName);
+    log("\n── Installing frontend skill ──");
+    const main = await installSkill({
+      projectRoot: cwd,
+      templateDir: path.join(TEMPLATES, "frontend", "implement-app"),
+      skillName: "implement-app",
+      config: cfg,
+      prompts,
+      log,
+    });
+    installed.push(`.claude/skills/${main.skillName}`);
+    for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
+      const enabled =
+        sub === "jira-tracking"
+          ? cfg.integrations.jira.enabled
+          : sub === "sonar-fix"
+            ? cfg.integrations.sonar.enabled
+            : true;
+      if (!enabled) continue;
+      const r = await installSkill({
+        projectRoot: cwd,
+        templateDir: path.join(TEMPLATES, "shared", sub),
+        skillName: sub,
+        config: cfg,
+        prompts,
+        log,
+      });
+      installed.push(`.claude/skills/${r.skillName}`);
+    }
+  }
+
+  if (be) {
+    const cfg = backendConfig(be, integrations, projectName);
+    log("\n── Installing backend skill ──");
+    const main = await installSkill({
+      projectRoot: cwd,
+      templateDir: path.join(TEMPLATES, "backend", "implement-backend"),
+      skillName: "implement-backend",
+      config: cfg,
+      prompts,
+      log,
+    });
+    installed.push(`.claude/skills/${main.skillName}`);
+    if (!fe) {
+      // shared support skills (only install once if both stacks selected)
+      for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
+        const enabled =
+          sub === "jira-tracking"
+            ? cfg.integrations.jira.enabled
+            : sub === "sonar-fix"
+              ? cfg.integrations.sonar.enabled
+              : true;
+        if (!enabled) continue;
+        const r = await installSkill({
+          projectRoot: cwd,
+          templateDir: path.join(TEMPLATES, "shared", sub),
+          skillName: sub,
+          config: cfg,
+          prompts,
+          log,
+        });
+        installed.push(`.claude/skills/${r.skillName}`);
+      }
+    }
+  }
+
+  if (integrations.hooks) {
+    log("\n── Installing hooks ──");
+    installHooks({
+      projectRoot: cwd,
+      templateHooksDir: path.join(TEMPLATES, "hooks"),
+      log,
+    });
+    installed.push(".claude/hooks/");
+  }
+
+  if (integrations.mcp) {
+    log("\n── Writing .mcp.json.example ──");
+    const variant = stacks.includes("frontend") ? "frontend" : "backend";
+    installMcp({
+      projectRoot: cwd,
+      templateMcpDir: path.join(TEMPLATES, "mcp"),
+      variant,
+      log,
+    });
+    installed.push(".mcp.json.example");
+  }
+
+  postInstallMessage({ stacks, integrations, installed });
+  prompts.close();
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    err(`\nFailed: ${e.message || e}`);
+    if (process.env.DEBUG) err(e.stack);
+    prompts.close();
+    process.exit(1);
+  });

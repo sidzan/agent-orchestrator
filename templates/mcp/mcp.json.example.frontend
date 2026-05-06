@@ -1,0 +1,52 @@
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": {
+        "JIRA_URL": "https://yourco.atlassian.net/",
+        "JIRA_USERNAME": "you@example.com",
+        "JIRA_API_TOKEN": "your-jira-api-token",
+        "JIRA_DEFAULT_PROJECT": "PROJ"
+      }
+    },
+    "bitbucket": {
+      "command": "npx",
+      "args": ["-y", "bitbucket-mcp@latest"],
+      "env": {
+        "BITBUCKET_URL": "https://api.bitbucket.org/2.0",
+        "BITBUCKET_WORKSPACE": "your-workspace",
+        "BITBUCKET_USERNAME": "you@example.com",
+        "BITBUCKET_PASSWORD": "your-bitbucket-app-password (see https://bitbucket.org/account/settings/app-passwords/)"
+      }
+    },
+    "lokalise": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--mount",
+        "type=bind,source=/absolute/path/to/your/repo,target=/workspace",
+        "-w",
+        "/workspace",
+        "-e",
+        "LOKALISE_API_TOKEN",
+        "-e",
+        "LOKALISE_PROJECT_ID",
+        "-e",
+        "ANTHROPIC_API_KEY",
+        "your-org/lokalise-mcp:latest",
+        "sh",
+        "-c",
+        "git config --global --add safe.directory /workspace && python -m lokalise_mcp"
+      ],
+      "env": {
+        "LOKALISE_API_TOKEN": "your-lokalise-token",
+        "LOKALISE_PROJECT_ID": "your-lokalise-project-id",
+        "ANTHROPIC_API_KEY": ""
+      }
+    }
+  }
+}
