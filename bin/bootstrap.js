@@ -56,11 +56,10 @@ function micDropAndExit() {
   process.exit(2);
 }
 
-async function runPatternDiscovery({ cwd, stacks, fe, be }) {
+async function runPatternDiscovery({ cwd, stacks, resolvedSkillDir, fe, be }) {
   log("\n── Pattern Discovery (required) ──");
   log("This scans your codebase using `claude` (read-only: Read/Glob/Grep)");
-  log("to tailor the skill's references and pipeline checklists to your");
-  log("project's actual file paths, components, and conventions.");
+  log("to derive project-specific reference docs into the installed skill.");
   log("");
   log("  Estimated:   30–90 seconds, ~5–20K tokens");
   log("  Cost:        billed against your existing Claude Code session");
@@ -68,22 +67,10 @@ async function runPatternDiscovery({ cwd, stacks, fe, be }) {
   const yes = await prompts.confirm("Run pattern discovery?", true);
   if (!yes) micDropAndExit();
 
-  const templatesToInstall = [];
-  if (stacks.includes("frontend"))
-    templatesToInstall.push(
-      path.join(TEMPLATES, "frontend", "implement-app"),
-      path.join(TEMPLATES, "shared")
-    );
-  if (stacks.includes("backend"))
-    templatesToInstall.push(
-      path.join(TEMPLATES, "backend", "implement-backend"),
-      path.join(TEMPLATES, "shared")
-    );
-
   const result = await runDiscovery({
-    templatesToInstall,
+    stacks,
     projectRoot: cwd,
-    stack: stacks,
+    skillDir: resolvedSkillDir,
     apps: fe ? fe.apps : be ? [{ name: be.projectName, path: be.srcPath }] : [],
     log,
   });
@@ -93,25 +80,22 @@ async function runPatternDiscovery({ cwd, stacks, fe, be }) {
       err("\nclaude CLI not found on PATH.");
       micDropAndExit();
     }
-    if (result.reason === "no-tags") {
-      log("(no DISCOVER tags found in selected templates — skipping)");
-      return null;
+    if (result.reason === "no-entries") {
+      log("(no discovery entries for selected stacks — skipping)");
+      return;
     }
     err(`\nDiscovery failed: ${result.reason}`);
     if (result.logPath) err(`See ${result.logPath} for details.`);
     if (result.stderr) err(result.stderr.split("\n").slice(0, 10).join("\n"));
-    log("\nProceeding with ship-as-is fallback content for all sections.");
-    return {};
+    log("\nProceeding with empty references/ — agents will read the codebase directly.");
+    return;
   }
 
-  const summary = summarize(result.map);
+  const { derived, fallback, total } = summarize(result);
   log(`\n── Pattern Discovery — results ──`);
-  for (const id of summary.derived) log(`  ✓ ${id}  (derived)`);
-  for (const id of summary.fallback) log(`  ⚠ ${id}  (fallback)`);
-  log(
-    `\nSections derived: ${summary.derived.length}/${result.tagCount}.  Fallback: ${summary.fallback.length}/${result.tagCount}.`
-  );
-  return result.map;
+  for (const f of derived) log(`  ✓ ${f}  (derived)`);
+  for (const f of fallback) log(`  ⚠ ${f}  (fallback — no file written)`);
+  log(`\nWrote ${derived.length}/${total} reference file(s) into ${resolvedSkillDir}/references/.`);
 }
 
 async function confirmFrontend(fe) {
@@ -301,15 +285,6 @@ async function main() {
   const integrations = await gatherIntegrations(stacks);
   const projectName = path.basename(cwd);
 
-  // Pass 4 — Pattern Discovery (mandatory: hard exit if claude is missing or
-  // the user declines).
-  const discoveryMap = await runPatternDiscovery({
-    cwd,
-    stacks,
-    fe,
-    be,
-  });
-
   const installed = [];
 
   if (fe) {
@@ -322,9 +297,18 @@ async function main() {
       config: cfg,
       prompts,
       log,
-      discoveryMap,
     });
     installed.push(`.claude/skills/${main.skillName}`);
+
+    // Pass 4 — Discovery runs after the kernel is in place, targeting the
+    // resolved skill dir (which may have been renamed via rename-on-conflict).
+    await runPatternDiscovery({
+      cwd,
+      stacks: ["frontend"],
+      resolvedSkillDir: main.target,
+      fe,
+    });
+
     for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
       const enabled =
         sub === "jira-tracking"
@@ -340,7 +324,6 @@ async function main() {
         config: cfg,
         prompts,
         log,
-        discoveryMap,
       });
       installed.push(`.claude/skills/${r.skillName}`);
     }
@@ -356,9 +339,18 @@ async function main() {
       config: cfg,
       prompts,
       log,
-      discoveryMap,
     });
     installed.push(`.claude/skills/${main.skillName}`);
+
+    // Pass 4 — Discovery runs after the kernel is in place, targeting the
+    // resolved skill dir (which may have been renamed via rename-on-conflict).
+    await runPatternDiscovery({
+      cwd,
+      stacks: ["backend"],
+      resolvedSkillDir: main.target,
+      be,
+    });
+
     if (!fe) {
       // shared support skills (only install once if both stacks selected)
       for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
@@ -376,7 +368,6 @@ async function main() {
           config: cfg,
           prompts,
           log,
-          discoveryMap,
         });
         installed.push(`.claude/skills/${r.skillName}`);
       }
