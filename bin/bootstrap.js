@@ -7,6 +7,7 @@ const { detect } = require("../lib/detect");
 const prompts = require("../lib/prompts");
 const { installSkill, installHooks, installMcp } = require("../lib/install");
 const { runDiscovery, summarize } = require("../lib/discover");
+const { installDependencies } = require("../lib/post-install");
 
 const log = (msg) => process.stdout.write(`${msg}\n`);
 const err = (msg) => process.stderr.write(`${msg}\n`);
@@ -264,21 +265,26 @@ function backendConfig(be, integrations, projectName) {
   };
 }
 
-function postInstallMessage({ stacks, integrations, installed }) {
+function postInstallMessage({ installed, deps }) {
   log("\n──────────────────────────────────────────────");
   log("✔ Install complete.");
   for (const i of installed) log(`  • ${i}`);
-  log("\nNext steps:");
-  let n = 1;
-  if (stacks.includes("frontend")) {
-    log(`  ${n++}. Install agent-browser skill:  npx skills add vercel-labs/agent-browser`);
-    log(`  ${n++}. Install agent-browser CLI:    npm i -g agent-browser`);
+  if (deps && deps.installed.length) {
+    log("\nDependencies installed:");
+    for (const d of deps.installed) log(`  ✓ ${d}`);
   }
-  if (integrations.mcp) {
-    log(`  ${n++}. Configure MCP:                cp .mcp.json.example .mcp.json (fill in secrets)`);
+  if (deps && deps.skipped.length) {
+    log("\nDependencies already present (skipped):");
+    for (const d of deps.skipped) log(`  • ${d}`);
   }
-  log(`  ${n++}. Review .claude/skills/*/references/ — derived from your codebase by claude. Edit by hand if needed.`);
-  log(`  ${n++}. Try it:                       /implement-app or /implement-backend in Claude Code`);
+  if (deps && deps.failed.length) {
+    log("\nDependencies you still need to install (run manually):");
+    for (const f of deps.failed) log(`  → ${f.step}: ${f.hint}`);
+  }
+  log("\nNext:");
+  log(`  • Edit .mcp.json to fill in secrets (Atlassian token, Bitbucket app password, …)`);
+  log(`  • Review .claude/skills/*/references/ — derived from your codebase by claude. Edit by hand if needed.`);
+  log(`  • Try it: /implement-app or /implement-backend in Claude Code.`);
 }
 
 async function main() {
@@ -431,7 +437,17 @@ async function main() {
     installed.push(".mcp.json.example");
   }
 
-  postInstallMessage({ stacks, integrations, installed });
+  // Real post-install: run npx skills add / npm i -g / cp .mcp.json
+  // instead of just printing the commands as next steps.
+  const deps = await installDependencies({
+    stacks,
+    projectRoot: cwd,
+    prompts,
+    log,
+    err,
+  });
+
+  postInstallMessage({ installed, deps });
   prompts.close();
 }
 
