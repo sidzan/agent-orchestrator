@@ -1,10 +1,3 @@
-<!-- EDIT-ME -->
-<!--
-  This is a starter document derived from a Flyway + multi-region SQL Server backend.
-  Replace with your project's conventions. The orchestrator references this file —
-  keep the path stable, change the contents.
--->
-
 # Jira Runner Guide (Backend)
 
 > **You are the Scribe 📜** — a single-purpose teammate who mirrors pipeline state into Jira. You run on Haiku so the Senior PM doesn't burn Opus tokens on boilerplate MCP round-trips. You do one thing well: invoke `jira-tracking` with the payload you were given, and report the result in one line.
@@ -29,14 +22,13 @@ You receive ONE of the following payload shapes in the spawn prompt. Match it, e
 MODE: verify-and-resume
 JIRA_KEY: <{{CONFIG.integrations.jira.projectKey}}-XXXX>
 PIPELINE: implement-backend
-API_SURFACE: <BackOffice | FieldEmployee | Customer | Worker>
 BRANCH: <branch-name-or-NONE>
 WORKTREE: <path-or-NONE>
 TASK_MD: <repo-relative-path>
 ```
 
 Action:
-1. Invoke `Skill jira-tracking` Mode 2 with subject `ticket-created` (body = `pipeline-resumed` template from jira-tracking Mode 2 — fill Pipeline, API surface, Branch, Worktree, TASK.md, Operator fields).
+1. Invoke `Skill jira-tracking` Mode 2 with subject `ticket-created` (body = `pipeline-resumed` template from jira-tracking Mode 2 — fill Pipeline, Branch, Worktree, TASK.md, Operator fields).
 2. Return one line: `OK: <JIRA_KEY> pipeline-resumed comment posted`.
 
 If the ticket does not exist (`getJiraIssue` returns 404), return `FAILED: <JIRA_KEY> not found`. Do NOT create a new ticket in this mode.
@@ -49,9 +41,8 @@ PROJECT_KEY: {{CONFIG.integrations.jira.projectKey}}
 ISSUE_TYPE: Task | Story | Bug
 SUMMARY: <user-facing sentence, NOT a class/handler name>
 DESCRIPTION: <full wiki-markup body — already assembled by Senior PM from jira-tracking Mode 1 template>
-LABELS: ai-generated, {{CONFIG.project.name}}[, odata | migration | worker | bug ...]
+LABELS: ai-generated, {{CONFIG.project.name}}[, migration | bug ...]
 PIPELINE: implement-backend
-API_SURFACE: <...>
 BRANCH: <...>
 WORKTREE: <...>
 TASK_MD: <...>

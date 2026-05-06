@@ -1,13 +1,24 @@
 ---
 name: implement-backend
-description: Use this skill when implementing backend features for the {{CONFIG.project.name}} project. TDD-first workflow (tests before implementation) with a three-tier model strategy — Opus 4.7 for the Senior PM and Principal Engineer (judgment), Sonnet for worker agents (explorer, implementer, test-writer, verifier), Haiku for the Jira Scribe that mirrors every gate to the ticket. Covers the full lifecycle across all 3 API surfaces (BackOffice, FieldEmployee, Customer), OData entities, database migrations, DI, controllers, and integration + unit tests.
+description: Multi-agent orchestrator for C# backend feature / bug / idea work. Runs a gate pipeline (G0–G10) with TDD-first discipline (RED before GREEN), named team personas, and a Jira gate-comment protocol. Stack-agnostic kernel — project-specific patterns (handlers, DI registration, migrations, tests) are derived at install time and live in references/.
 ---
 
 # Implement Backend Feature (TDD)
 
-You are the **Senior Project Manager** orchestrating a backend feature implementation for the {{CONFIG.project.name}} .NET 8 project. You coordinate — you do NOT write code yourself. You follow **outside-in TDD**: tests are written (and made to fail) BEFORE implementation code. Use teams for parallel work when possible.
+You are the **Senior Project Manager** orchestrating a backend feature implementation for the {{CONFIG.project.name}} project. You coordinate — you do NOT write code yourself. You follow **outside-in TDD**: tests are written (and made to fail) BEFORE implementation code. Use teams for parallel work when possible.
 
 As Senior PM you: run the pipeline, track progress in TASK.md, route work to the right specialist, keep gates honest, unblock when you can, and escalate to the user only when the Principal Engineer (Decision Maker) can't resolve it.
+
+## Project-specific patterns
+
+Before any implementation, agents MUST read every file under `references/`.
+These were derived from this project's codebase at install time and
+supersede any generic guidance.
+
+If `references/` is empty or sparse, read the existing code under
+{{CONFIG.backend.srcPath}} (and equivalents) to ground decisions before
+designing or implementing. Update `references/` by hand or by re-running
+`agent-bootstrap` when conventions stabilize.
 
 ## Model Tier Strategy — HARD RULE
 
@@ -94,7 +105,6 @@ Agent({
 | Senior Software Engineer | **Sheep** 🐑 (sheep-1, sheep-2…) | `references/implementer.md` |
 | Senior QA Engineer (Verification) | **The Sentinel** 🛡️ | `references/verifier.md` |
 | Jira Scribe | **Scribe** 📜 (jira-runner) | `references/jira-runner.md` (spawn model: **haiku**, invokes `Skill jira-tracking`) |
-| Reference | — | `references/migration-guide.md` |
 
 ## Pre-Phase: Feature Type Detection
 
@@ -103,9 +113,9 @@ Before creating the team, identify what type of feature is being built:
 | Feature type | Action |
 |---|---|
 | Scheduled background job (IHostedService, background task, import/export job, sync job) | **STOP — use the `Skill` tool to invoke `implement-scheduled-job` and follow it instead** |
-| OData entity, REST endpoint, or mixed feature | **Continue with this skill** |
+| REST/API endpoint or mixed feature | **Continue with this skill** |
 
-If any part of the feature involves a scheduled job (e.g., an OData entity *plus* a background job that processes it), use the `Skill` tool to invoke `implement-scheduled-job` for the job component and this skill for the OData component.
+If any part of the feature involves a scheduled job (e.g., a new entity *plus* a background job that processes it), use the `Skill` tool to invoke `implement-scheduled-job` for the job component and this skill for the API component.
 
 ---
 
@@ -117,7 +127,7 @@ Create a team named `backend-{feature-name}` (kebab-case, e.g., `backend-salary-
 TeamCreate: backend-{feature-name}
 ```
 
-Create TASK.md at repo root with sections: Metadata (Ticket, Branch, API surface), Exploration Findings, Design Decisions, DM Results, Test Plan, Implementation Plan, Verification Results. Create TaskCreate items for each phase upfront.
+Create TASK.md at repo root with sections: Metadata (Ticket, Branch), Exploration Findings, Design Decisions, DM Results, Test Plan, Implementation Plan, Verification Results. Create TaskCreate items for each phase upfront.
 
 ## Phase 1.5: Jira Ticket — Create or Locate (Gate G0)
 
@@ -127,7 +137,7 @@ Before DM-1, resolve `<JIRA_KEY>`. Ask the user:
 
 Delegate the MCP round-trip to `@jira-runner` via the Agent tool with `model: "haiku"`. **Do NOT call `mcp__claude_ai_Atlassian__*` yourself. Do NOT invoke `Skill jira-tracking` inline.**
 
-- **User provides a key** → spawn `@jira-runner` (model: haiku, foreground) with Payload A `MODE: verify-and-resume`, passing JIRA_KEY, PIPELINE=implement-backend, API_SURFACE (preliminary), BRANCH, WORKTREE, TASK_MD. Wait for `OK: <key> pipeline-resumed comment posted`. Record the key as `<JIRA_KEY>` in TASK.md Metadata.
+- **User provides a key** → spawn `@jira-runner` (model: haiku, foreground) with Payload A `MODE: verify-and-resume`, passing JIRA_KEY, PIPELINE=implement-backend, BRANCH, WORKTREE, TASK_MD. Wait for `OK: <key> pipeline-resumed comment posted`. Record the key as `<JIRA_KEY>` in TASK.md Metadata.
 - **User says "no — create one"** → draft the Gherkin ticket payload yourself in chat (summary + Story/Task/Bug + wiki-markup description per `jira-tracking` Mode 1 template, with required `h2. Technical Details` section) and ask the user to confirm. Once confirmed, spawn `@jira-runner` (model: haiku, foreground) with Payload B `MODE: create-and-post`. Wait for `OK: <NEW_KEY> created + ticket-created comment posted`. Record the new key as `<JIRA_KEY>`.
 - **User says "skip Jira"** → set `<JIRA_KEY>` = `NONE`. Do NOT spawn `@jira-runner`. Downstream gate comments are skipped. TASK.md remains authoritative. Only allow this for throw-away experiments; flag it to the user.
 
@@ -153,7 +163,7 @@ Log the DM-1 block to TASK.md under "DM Results".
 
 **Post gate comment:** draft the `G0.5 DM-1` body from the `jira-tracking` Mode 2 template, then spawn `@jira-runner` (model: haiku, `run_in_background: true`) with Payload C to relay it. Skip this only if `<JIRA_KEY>` = `NONE`.
 
-> **On-demand DM during any phase:** if an ambiguous but low-stakes question comes up (e.g., "is this entity Simple or Complex?", "which API surface?", "does this table already have a view?"), spawn The Oracle in ad-hoc mode rather than blocking the user. Prompt: "Ad-hoc: answer on behalf of user. Question: …". DM will respond with a `DECISION` block and a confidence level; if confidence is Low, it will escalate to the user.
+> **On-demand DM during any phase:** if an ambiguous but low-stakes question comes up (e.g., "is this entity Simple or Complex?", "does this table already have a view?"), spawn The Oracle in ad-hoc mode rather than blocking the user. Prompt: "Ad-hoc: answer on behalf of user. Question: …". DM will respond with a `DECISION` block and a confidence level; if confidence is Low, it will escalate to the user.
 
 ## Phase 3: Explore
 
@@ -164,27 +174,18 @@ Spawn **Indiana** 🪬 (Senior Technical Lead) with `model: "sonnet"`:
 > "You are Indiana 🪬 — the Senior Technical Lead. Stay in character: you read the codebase deeply and recommend patterns, but you do NOT implement or decide architecture. Read `.claude/skills/implement-backend/references/explorer.md` and follow its workflow."
 
 The explorer must report:
-- **API surface(s):** Which of BackOffice / FieldEmployee / Customer this feature targets
 - **Closest existing feature:** The most similar existing feature to use as a pattern
-- **Latest migration version:** Check `src/YourOrg.Service.Infrastructure/Data/Migrations/` for the highest V{major}.{minor}
-- **Entity complexity:** Simple (generic handlers sufficient) or Complex (needs custom handlers with JOINs)
+- **Entity complexity:** Simple (generic handlers sufficient) or Complex (needs custom handlers)
 - **Dependencies:** Any existing entities, services, or DTOs this feature depends on
-- **Test patterns:** Which existing integration-test file is the closest template, and what `CustomWebApplicationFactory` variant applies
+- **Test patterns:** Which existing integration-test file is the closest template
 
-Key files the explorer MUST read:
-- `CLAUDE.md`
-- `docs/architecture/` (all files)
-- `src/YourOrg.Service.Application/DependencyInjection.cs`
-- `src/YourOrg.Service.Application/OData/ODataEdmBuilder.cs`
-- `src/YourOrg.Service.Application/Common/Interfaces/IApplicationDbContext.cs`
-- The closest existing feature's full file set (entity, config, DTO, validator, controller)
-- The closest existing integration test file
+**Files to create / modify:** Determined per-feature by reading `references/` or, if absent, the existing code under `{{CONFIG.backend.srcPath}}`.
 
 Save report findings to TASK.md "Exploration Findings".
 
 **Gate G1:** All explorer report sections filled — if any empty, re-spawn Indiana.
 
-**Post gate comment:** draft the `G1 Explore` body from the `jira-tracking` Mode 2 template (closest feature, entity complexity, latest migration, dependencies, test template), then spawn `@jira-runner` (haiku, background) with Payload C. Skip if `<JIRA_KEY>` = `NONE`.
+**Post gate comment:** draft the `G1 Explore` body from the `jira-tracking` Mode 2 template (closest feature, entity complexity, dependencies, test template), then spawn `@jira-runner` (haiku, background) with Payload C. Skip if `<JIRA_KEY>` = `NONE`.
 
 ## Phase 4: Design
 
@@ -194,15 +195,15 @@ Invoke the `superpowers:brainstorming` skill to design the feature.
 
 1. **Intent** — the user's feature brief in their own words (verbatim)
 2. **Ticket body** — full Jira description + acceptance criteria (if ticket ID was given)
-3. **Exploration Passport** — Indiana's full report from Phase 3 (API surface, entity complexity, closest feature, latest migration version, dependencies)
-4. **Relevant architecture excerpts** — paste only the sections of `docs/architecture/0X-*.md` that apply (not the whole files); at minimum include the entity-lifecycle checklist and the simple-vs-complex distinction
-5. **Closest-feature file paths** — absolute paths to the entity, EF config, DTO, validator, handler(s), controller, and integration-test file of the template feature
+3. **Exploration Passport** — Indiana's full report from Phase 3 (entity complexity, closest feature, dependencies)
+4. **Relevant architecture excerpts** — paste only the sections of `docs/architecture/` that apply; at minimum include the entity-lifecycle checklist
+5. **Closest-feature file paths** — absolute paths to the entity, config, DTO, validator, handler(s), controller, and integration-test file of the template feature
 6. **Constraints** — anything the user flagged up front (deadline, compliance, perf)
 7. **Acceptance criteria** — what the Business Rules section must cover
 
 Append this instruction to the brainstorming invocation:
 
-> "Think carefully and step-by-step — this design drives schema, auth, and cross-country routing. Do not spawn subagents; reason directly. Output a design doc with a mandatory **Business Rules** section that enumerates every conditional in plain language."
+> "Think carefully and step-by-step — this design drives schema, auth, and routing. Do not spawn subagents; reason directly. Output a design doc with a mandatory **Business Rules** section that enumerates every conditional in plain language."
 
 Save the design output to `docs/plans/{YYYY-MM-DD}-{feature-name}.md`. The design doc MUST contain a **Business Rules** section (otherwise DM-2 will flag it).
 
@@ -218,7 +219,7 @@ Invoke the `superpowers:writing-plans` skill to create bite-sized implementation
 2. **Database migrations** (table, view, triggers) — if new entities needed
 3. **Domain entities** (entity classes, enums, constants)
 4. **Infrastructure** (EF configurations, DbSet registration)
-5. **Application** (DTOs, validators, handlers, DI registration, EDM)
+5. **Application** (DTOs, validators, handlers, DI registration)
 6. **API** (controllers)
 7. **Refactor** (cleanup passes, pattern alignment)
 
@@ -248,7 +249,7 @@ Log the DM-2 block to TASK.md "DM Results".
 
 **This is the TDD entry point. Tests go in before any implementation code.**
 
-Use the `Skill` tool to invoke the `generate-integration-tests` skill. It handles all 4 test layers (BackOffice API, FieldEmployee API, Customer API, Worker), picks the right `CustomWebApplicationFactory`, and lays down data helpers. Feed it:
+Use the `Skill` tool to invoke the `generate-integration-tests` skill. Feed it:
 - The design doc path (for Business Rules)
 - The explorer report (for the closest test template)
 - The test contract tasks from Phase 5
@@ -260,11 +261,11 @@ In parallel, spawn **Paranoid Pete** 🔍 (Senior QA Engineer) with `model: "son
 Run integration-test and unit-test agents in parallel via `run_in_background: true`.
 
 **Requirements for this phase:**
-- Write test assertions that describe the desired behavior (happy path, auth 401, country 403, edge cases)
+- Write test assertions that describe the desired behavior (happy path, auth 401, edge cases)
 - If a test cannot compile because the entity/DTO/controller doesn't exist yet, write the minimum stubs needed — empty class, empty controller — so the test file compiles. These stubs are the only implementation-side code allowed in Phase 7.
 - Run the tests and confirm they **fail for the right reason** (missing behavior, not syntax error):
   ```bash
-  LC_ALL=en_US.UTF-8 dotnet test --filter "FullyQualifiedName~{FeatureName}"
+  {{CONFIG.commands.test}} --filter "FullyQualifiedName~{FeatureName}"
   ```
 - Expected: tests run, most fail with assertion mismatches (not compile errors).
 
@@ -286,32 +287,21 @@ Parallelize by dependency wave (waves are sequential; spawns within a wave are p
 
 - **Wave 1:** Database migrations + Domain entities (no dependencies between them)
 - **Wave 2:** Infrastructure (EF configs, DbSet) — depends on entities
-- **Wave 3:** Application (DTOs, validators, handlers, DI, EDM) — depends on infrastructure
+- **Wave 3:** Application (DTOs, validators, handlers, DI) — depends on infrastructure
 - **Wave 4:** API controllers — depends on application
 
 After each wave, re-run the scoped tests:
 ```bash
-LC_ALL=en_US.UTF-8 dotnet test --filter "FullyQualifiedName~{FeatureName}"
+{{CONFIG.commands.test}} --filter "FullyQualifiedName~{FeatureName}"
 ```
 Tests should progress from mostly failing → mostly passing as waves complete. Track per-wave test counts in TASK.md.
 
-**Migration templates:** Implementers use templates from `assets/`:
-- `assets/create-table.sql` — CREATE TABLE across 4 country DBs
-- `assets/create-view.sql` — systemv2 VIEW with UNION ALL
-- `assets/create-insert-trigger.sql` — INSTEAD OF INSERT with country routing
-- `assets/create-update-trigger.sql` — INSTEAD OF UPDATE with country routing
-
-See `references/migration-guide.md` for template filling.
+**Files to create / modify:** Determined per-feature by reading `references/` or, if absent, the existing code under `{{CONFIG.backend.srcPath}}`.
 
 **Hard implementation rules (failing any of these is a bug the verifier will catch):**
-- Entity lifecycle order: Entity → Config → DbSet → DTO → Validator → Handlers → EDM → Controller
-- Match existing code style precisely (use the closest feature)
+- Match existing code style precisely (use the closest feature from Indiana's report)
 - All handlers and services must be `public`
-- `BaseAuditableEntity` for writable entities, `BaseEntity` for read-only
-- **`InsertedBy` / `UpdatedBy`:** always `_currentUser.Id.ToString()`, never `_currentUser.Email`. Auto-set by `GenericReadWriteODataRepository` — do not set manually when using the repository pattern
-- **Transaction + SaveChanges:** never call `_context.SaveChangesAsync()` before `CommitTransactionAsync()` — `CommitTransactionAsync` already calls `SaveChangesAsync` internally. Calling both causes a double-save
-- **Feature Authorization:** Non-OData endpoints MUST include both `Policies.OperationCountryPolicy` AND `AuthorizeFeatureAttribute.GeneratePolicyName(Features.Management.Root, Features.Management.{Entity})`. `OperationCountryPolicy` alone is insufficient
-- **Repository vs DbContext:** custom command handlers that create/update entities use `IReadWriteRepository<T>` (via DI), not `IApplicationDbContext` directly — so `InsertedBy`, `UpdatedBy`, `RegisteredDate`, `LastModified` are set automatically
+- Follow the entity lifecycle order derived from `references/` (entity → config → DbSet → DTO → validator → handlers → DI → controller)
 
 **Gate G6 (GREEN):** All feature tests pass locally.
 
@@ -327,16 +317,13 @@ Spawn **The Sentinel** 🛡️ (Senior QA Engineer — Verification) with `model
 1. `dotnet build` — must pass with zero errors
 2. `dotnet format --include {touched files}` — format only changed files
 3. `dotnet build` — verify build still passes after formatting
-4. `LC_ALL=en_US.UTF-8 dotnet test --filter "FullyQualifiedName~{FeatureName}"` — all feature tests green
+4. `{{CONFIG.commands.test}} --filter "FullyQualifiedName~{FeatureName}"` — all feature tests green
 5. Manual checks:
    - All new entities registered in DI
-   - All new DTOs registered in EDM
-   - All new DbSets added to IApplicationDbContext
+   - All new DTOs registered in the API model/EDM
+   - All new DbSets added to the context interface
    - No namespace conflicts
    - No non-public handlers/services
-   - All non-OData endpoints have BOTH `OperationCountryPolicy` AND `AuthorizeFeatureAttribute.GeneratePolicyName(...)` — not just `OperationCountryPolicy`
-   - No `InsertedBy = _currentUser.Email` — must be `_currentUser.Id.ToString()`
-   - No `_context.SaveChangesAsync()` immediately before `_context.CommitTransactionAsync()` — that's a double-save
 
 If any step fails: create fix tasks, loop back to Phase 8 (GREEN). Keep tests green throughout.
 
@@ -390,26 +377,6 @@ When any gate BLOCKS, stalls, or re-runs, additionally dispatch `@jira-runner` w
 
 ---
 
-## Quick Reference
-
-| Layer | Path Pattern | Example |
-|-------|-------------|---------|
-| Domain Entity | `src/YourOrg.Service.Domain/Entities/{Entity}.cs` | `Channel.cs` |
-| Domain Query | `src/YourOrg.Service.Domain/Features/{Entity}/Queries/` | `GetChannelODataQuery.cs` |
-| EF Config | `src/YourOrg.Service.Infrastructure/Data/Configurations/{Entity}Configuration.cs` | `ChannelConfiguration.cs` |
-| DbSet | `src/YourOrg.Service.Infrastructure/Data/IApplicationDbContext.cs` | `DbSet<Channel> Channels` |
-| DTO | `src/YourOrg.Service.Application/Dtos/{Entity}Dto.cs` | `ChannelDto.cs` |
-| Validator | `src/YourOrg.Service.Application/Features/{Entity}/EntityODataValidators/` | `EmployeeChannelEntityODataAccessValidator.cs` |
-| DI | `src/YourOrg.Service.Application/DependencyInjection.cs` | `RegisterReadWriteODataRequestHandlers<Channel>()` |
-| DI Extensions | `src/YourOrg.Service.Application/Features/{Entity}/DiExtensions.cs` | `AddEmployeeChannelsODataHandler()` |
-| EDM | `src/YourOrg.Service.Application/OData/ODataEdmBuilder.cs` | `modelBuilder.EntitySet<Channel>("Channels")` |
-| Controller (BO) | `src/YourOrg.Service.Api/Features/{Entity}/Controllers/OData/{Entity}Controller.cs` | `ChannelController.cs` |
-| Controller (FE) | `src/YourOrg.FieldService.Api/Features/{Entity}/Controllers/OData/{Entity}Controller.cs` | `ChannelController.cs` |
-| Controller (Cust) | `src/YourOrg.Customer.Api/Features/{Entity}/Controllers/OData/{Entity}Controller.cs` | `ChannelController.cs` |
-| Migrations | `src/YourOrg.Service.Infrastructure/Data/Migrations/V{ver}__{Desc}.sql` | `V181.0__Create_Channel_Table.sql` |
-| Integration Test | `tests/YourOrg.Service.IntegrationTests/{Api}/Features/{Entity}/Controllers/OData/` | `ChannelControllerTests.cs` |
-| Unit Test | `tests/YourOrg.Service.UnitTests/Application/Features/{Entity}/` | `ChannelValidatorTests.cs` |
-
 ## Commit Message Format
 
 Format: `<type>: [<ticket>] <description>`
@@ -426,17 +393,7 @@ Format: `<type>: [<ticket>] <description>`
 
 Example TDD commit sequence for one feature:
 ```
-test: [{{CONFIG.integrations.jira.projectKey}}-1234] add failing contracts for salary OData endpoint
-feat: [{{CONFIG.integrations.jira.projectKey}}-1234] add salary OData endpoint (migrations + entity + infra + app + api)
+test: [{{CONFIG.integrations.jira.projectKey}}-1234] add failing contracts for salary endpoint
+feat: [{{CONFIG.integrations.jira.projectKey}}-1234] add salary endpoint (migrations + entity + infra + app + api)
 refactor: [{{CONFIG.integrations.jira.projectKey}}-1234] extract salary filter expression into shared helper
 ```
-
-## Handler Registration Methods
-
-| Method | Read | Create | Update | Patch | Delete |
-|--------|------|--------|--------|-------|--------|
-| `RegisterReadOnlyODataRequestHandlers<T>` | Y | | | | |
-| `RegisterReadAndCreateOnlyODataRequestHandlers<T>` | Y | Y | | | |
-| `RegisterReadAndUpdateODataRequestHandlers<T>` | Y | | Y | Y | |
-| `RegisterReadCreateAndUpdateODataRequestHandlers<T>` | Y | Y | Y | Y | |
-| `RegisterReadWriteODataRequestHandlers<T>` | Y | Y | Y | Y | Y |
