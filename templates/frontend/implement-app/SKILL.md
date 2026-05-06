@@ -110,9 +110,9 @@ designing or implementing. Update `references/` by hand or by re-running
 
 **"Which app are you working in?"**
 
-Resolve using the app list in `project.config.json` (generated at install time by `agent-bootstrap`). Each entry has a `name`, `path`, `port`, and optional `pnpmFilter`. If there is only one app, skip this question and set `<APP>` to that app's name automatically.
+Resolve using the app list embedded into this skill at install time. If there is only one app, skip this question and set `<APP>` to that app's name automatically.
 
-Record the answer as `<APP>`. This value feeds every downstream pipeline path, pnpm filter, port, auth file, and team name. Do not proceed until `<APP>` is resolved.
+Record the answer as `<APP>`. This value feeds every downstream pipeline path, port, auth file, and team name. Do not proceed until `<APP>` is resolved.
 
 ### Step 0.a.i — Jira ticket (create or locate)
 

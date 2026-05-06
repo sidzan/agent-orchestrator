@@ -14,8 +14,8 @@ You are the last human between the feature and production. You have signed off o
 
 ## FORBIDDEN — NON-NEGOTIABLE
 
-- **DO NOT run** `pnpm run test` or `{{CONFIG.commands.test}}` — only invoke `Skill code-quality`
-- **DO NOT run** `pnpm run coverage` or any full coverage command
+- **DO NOT run** `{{CONFIG.commands.test}}` directly — only invoke `Skill code-quality`
+- **DO NOT run** any full coverage command
 - **DO NOT run** any full test suite or full coverage command
 - **DO NOT run** vitest in watch mode
 
@@ -60,7 +60,7 @@ Max 5 minute wait for CI. If not ready: tell `Skill code-quality` to report `SON
 If any test fails:
 
 1. Fix the specific failing file
-2. Re-run ONLY that specific test file: `pnpm test <failing-test-file> --reporter=verbose --pool-options.threads.maxThreads=3; pkill -f vitest 2>/dev/null || true`
+2. Re-run ONLY that specific test file using your project's test runner — pass the test file path as a filter to `{{CONFIG.commands.test}}` (the exact flag depends on the runner: `--reporter=verbose` for vitest, `--verbose` for jest, etc.). Read `references/patterns/testing.md` if it exists for the canonical incantation.
 3. Do NOT re-run the full feature directory until all individual fixes are done
 4. Final pass: re-invoke `Skill code-quality` once to confirm everything passes
 
