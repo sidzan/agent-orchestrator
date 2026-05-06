@@ -28,23 +28,25 @@ Manual test matrix (no automated tests in v1) lives at the bottom of `docs/desig
 
 | Path | Purpose |
 |---|---|
-| `bin/bootstrap.js` | CLI entry point (≤300 lines, zero deps). Runs the 3-pass flow, then renders templates and writes files. |
-| `lib/` | `detect.js` (stack detection), `prompts.js` (readline prompts), `substitute.js` (`{{CONFIG.*}}` + `{{#if}}` renderer), `install.js` (copy + write). Splits anything that overflows `bin/`. |
-| `templates/frontend/implement-app/` | Frontend orchestrator template (gates, teams incl. Inspector Clouseau, pipelines, EDIT-ME references, code templates). |
-| `templates/backend/implement-backend/` | Backend orchestrator template (different personas, SQL assets, EDIT-ME migration guide). |
+| `bin/bootstrap.js` | CLI entry point (zero deps). Runs the 4-pass flow (detect → confirm → integrations → kernel render → pattern discovery). |
+| `lib/` | `detect.js` (stack detection), `prompts.js` (readline prompts), `substitute.js` (`{{CONFIG.*}}` + `{{#if}}` renderer), `install.js` (copy + write), `discover.js` (claude subprocess + per-stack `FRONTEND_DISCOVERIES` / `BACKEND_DISCOVERIES` lists; writes derived files into `<skillDir>/references/`). |
+| `templates/frontend/implement-app/` | Frontend orchestrator kernel — methodology only (gates, personas incl. Inspector Clouseau, pipelines). No code templates, no shipped reference docs. |
+| `templates/backend/implement-backend/` | Backend orchestrator kernel — methodology only (gates, TDD-first personas, persona pointer table). No SQL assets, no shipped migration guide. |
 | `templates/shared/` | `jira-tracking/`, `create-pull-request/`, `sonar-fix/` — used by both orchestrators. |
 | `templates/hooks/` | `lint-on-save.sh`, `worktree-setup.sh`, `enforce-task-update.sh`. Opt-in. |
 | `templates/mcp/` | `mcp.json.example.frontend` (Atlassian + Bitbucket + Lokalise) and `mcp.json.example.backend` (Atlassian + Bitbucket). |
 | `implement-app/` | Local private frontend reference. **Gitignored. Never modified, never committed.** |
 | `docs/design.md` | Full design spec — authoritative for CLI flow, substitution model, install policy, error handling. |
 
-### CLI flow (3 passes + render)
+### CLI flow (4 passes)
 
 1. **Stack selection** — `Frontend / Backend / Both?`
 2. **Pass 1 — Structural inference (silent):** lockfiles, workspace files, `package.json` deps, ports from `scripts.dev`, `*.sln` / `*.csproj` recursion, Flyway / EF Core probe.
 3. **Pass 2 — Confirmation:** print inferred values, allow inline edits, deselect monorepo apps via checkboxes.
 4. **Pass 3 — Integrations:** Jira (Y/n), SonarQube (Y/n), hooks (Y/n), MCP template (Y/n). Defaults: yes.
-5. **Render:** install-time substitution renders templates → concrete files written into `.claude/skills/<name>/`, `.claude/hooks/`, and `.mcp.json.example` at repo root.
+5. **Render kernel:** install-time substitution renders templates → concrete files written into `.claude/skills/<name>/`.
+6. **Pass 4 — Pattern Discovery:** mandatory. Spawns `claude -p` (read-only: Read/Glob/Grep) with the per-stack `{filename, instruction}` list from `lib/discover.js`. Writes each non-FALLBACK entry into `<resolvedSkillDir>/references/`. If `claude` is missing or the user declines → mic-drop exit (`your loss! mic drop. bye`, code 2). If discovery fails mid-run → `references/` left empty/sparse and the install proceeds.
+7. **Hooks + MCP example** (optional, prompted in Pass 3).
 
 ### Substitution model
 

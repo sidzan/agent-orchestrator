@@ -16,7 +16,8 @@ When you pick **frontend** (React/TS):
 
 ```
 .claude/skills/
-├── implement-app/         orchestrator (gates G0–G10, named team personas, pipelines, EDIT-ME architecture references)
+├── implement-app/         orchestrator kernel (gates G0–G10, named team personas, pipelines)
+│   └── references/        derived from your codebase at install time (or empty if discovery declined)
 ├── jira-tracking/         shared support skill — creates Gherkin tickets, posts gate checkpoints
 ├── create-pull-request/   shared support skill — Bitbucket / GitHub PR workflow
 └── sonar-fix/             shared support skill — SonarQube triage + fix
@@ -76,7 +77,13 @@ Then copy the generated `.mcp.json.example` to `.mcp.json` and fill in your secr
 
 ## Editing the skill
 
-Installed skills are yours. Edit them. The architecture reference docs (`references/arch-*.md`) ship with **EDIT-ME** headers — they are starter patterns derived from a React-Admin + OData project; replace the contents with your stack's conventions. The orchestrator's contract is "agents read `arch-list-patterns.md` before implementing a list view" — keep that contract, change the contents.
+Installed skills are yours. Edit them.
+
+The shipped skill is a **methodology kernel** — gates, personas, the Jira `Automated update>` protocol, TDD discipline, model/cost discipline. It contains zero project-specific patterns. No React-Admin idioms, no OData filter conventions, no specific file paths.
+
+Project-specific patterns live in `references/`. They are **derived at install time** by `claude` reading your codebase (Read/Glob/Grep, no edits). Files written under `references/patterns/` and `references/conventions/` reflect *your* project's conventions, not someone else's. If pattern discovery is declined or `claude` is unavailable, the CLI exits — no fallback to hand-me-down idioms ships in the package.
+
+If `references/` ends up sparse (greenfield project, declined discovery, or specific patterns weren't derivable), agents are instructed to read your existing code directly before designing. You can also fill `references/` in by hand.
 
 ---
 
