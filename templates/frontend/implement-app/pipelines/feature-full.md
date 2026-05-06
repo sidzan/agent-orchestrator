@@ -220,7 +220,7 @@ Wait for all to complete.
 ## F10: Verification (Gate G7)
 
 Spawn @sentinel using Agent tool (model: sonnet):
-> "Read `teams/verifier.md`. Verify feature at `apps/<APP>/src/pages/<feature>/`. Mode: full. Invoke `Skill code-quality` (inputs: `<APP>`, `<feature>`, mode=full) to run every gate — do NOT duplicate the commands yourself; that skill is the single source of truth for the rules. Paste its Health Score block verbatim. Use `teams/verifier.md` Respawn Decisions table to choose the correct agent for each failing gate. Max 3 retries per bug."
+> "Read `teams/verifier.md`. Verify feature at the path(s) implemented by sheep (from TASK.md File Layout). Mode: full. Invoke `Skill code-quality` (inputs: `<APP>`, `<feature>`, mode=full) to run every gate — do NOT duplicate the commands yourself; that skill is the single source of truth for the rules. Paste its Health Score block verbatim. Use `teams/verifier.md` Respawn Decisions table to choose the correct agent for each failing gate. Max 3 retries per bug."
 
 **Gate G7:** Health score OVERALL = PASS.
 

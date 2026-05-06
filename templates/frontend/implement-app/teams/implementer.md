@@ -70,50 +70,31 @@ If any of those thoughts cross your mind: the answer is STILL to invoke the skil
 1. Read `CLAUDE.md` for project rules
 2. Read `TASK.md` to understand full scope and your assigned files
 3. **JIT-load the skill relevant to your task (PRIORITY):**
-   - **ALWAYS (any `.ts`/`.tsx` file):** `.claude/skills/react-admin-patterns/references/sonar-no-fly.md` — concrete rules extracted from real Sonar blockers (MUI Grid2 vs deprecated Grid, `slotProps` vs `InputProps`, `Number.parseInt` vs `parseInt`, optional chain, React key stability, nested-function depth). Skip this and `/sonar-fix` will rewrite your PR post-hoc.
-   - Building UI → `.claude/skills/react-admin-patterns/` (load the relevant reference)
-   - Working with data/filters → `.claude/skills/odata-patterns/` (load the relevant reference)
+   - Read every file under `references/` that is relevant to your task type (data-fetching layer, shared component library, resource registration site, etc.)
 4. **Architecture docs for deeper context (MUST READ relevant ones):**
-   - List views: `references/arch-list-patterns.md`
-   - Detail pages: `references/arch-detail-patterns.md`
-   - Shared components: `references/arch-shared-components.md`
-   - Custom REST APIs: `references/arch-custom-api-patterns.md` (**CRITICAL for non-OData endpoints**)
-   - API spec to feature: `references/arch-api-to-feature.md`
-   - Domain types: `references/arch-domain-models.md`
+   - `references/arch-*.md` files matching your task (list views, detail pages, custom APIs, domain models, etc.)
 
 ## Template Workflow
 
 1. Identify which templates apply from the Exploration Passport
 2. Copy template from `templates/` to feature directory
-3. Replace ALL placeholders (format: `<FeatureName>`, `<featureName>`, `<feature-name>`, `<ResourceName>`, `<FieldType>`, `<fieldName>`, `<TranslationKey>`, `<ApiPath>`)
+3. Replace ALL placeholders (format: `<FeatureName>`, `<featureName>`, `<feature-name>`, `<ResourceName>`, `<FieldType>`, `<fieldName>`, `<ApiPath>`)
 4. Add business logic from the Business Rules section of the FEAT document
 
 ## Execution Order
 
-1. Add to `packages/ui/config/Resources.ts` if new resource
-2. Create domain type in `packages/ui/domain/` if needed
-3. Create service in `apps/<APP>/src/pages/<feature>/services/`
-4. **Register service in `apps/<APP>/src/services/data/useDataProvider.ts`** — see `references/arch-custom-api-patterns.md`
-5. Create resource file in `apps/<APP>/src/admin/resources/`
-6. Register in `apps/<APP>/src/admin/admin.tsx`
-7. Create feature directory under `apps/<APP>/src/pages/`
-8. Build: config -> list -> details -> create
+Follow the execution order in the SPEC. When the SPEC leaves the order unspecified, follow the dependency chain implied by the File Layout: shared types and domain models first, then the data-fetching layer, then UI components.
 
-## CRITICAL Architecture Docs (MUST READ)
-
-- **Custom REST APIs:** `references/arch-custom-api-patterns.md` — ALL custom API calls MUST be registered in `useDataProvider.ts`, consumed via `useDataProvider<AdminDataProvider>()`
-- **List pages:** `references/arch-api-to-feature.md` — ALL list pages MUST use `ListPageContainer` + `DatagridConfigurable` + `TopToolbar`
-- **DatePicker:** `references/arch-shared-components.md` — raw DatePicker MUST be wrapped in `LocalizationProvider`
-- **Translations:** `references/arch-custom-api-patterns.md` — ALL user-visible text MUST use translation keys via `useTranslate()`
+**Files to create / modify:** Determined per-feature by reading `references/` or, if absent, the existing code under {{CONFIG.apps[0].path}}.
 
 ## ALWAYS-SHARED FILES
 
 These files must have a **single designated owner** per session. All other implementers MUST declare a dependency and wait before touching them:
 
-- `packages/ui/config/Resources.ts`
-- `apps/<APP>/src/i18n/en.json` (or equivalent translation file)
-- `apps/<APP>/src/admin/admin.tsx` (resource registration)
-- `apps/<APP>/src/services/data/useDataProvider.ts` (custom API registration)
+- The resource-registration site (e.g. a central resources config file)
+- The data-provider registration file (e.g. a custom `useDataProvider` or equivalent)
+- The shared translation / i18n file (if any)
+- The app entry point that registers routes or resources
 
 If you are not the designated owner of a shared file, add a note to TASK.md and wait for the owner to finish.
 
@@ -121,32 +102,28 @@ If you are not the designated owner of a shared file, add a note to TASK.md and 
 
 These are NON-NEGOTIABLE. No exceptions. No shortcuts.
 
-- **UI files (`ui/`)** — presentation ONLY: JSX, layout, styling.
-  - MUST NOT contain `useGetList`, `useGetOne`, `useCreate`, `useUpdate`, `dataProvider` calls
+- **UI files** — presentation ONLY: JSX, layout, styling.
+  - MUST NOT contain data-fetching calls
   - MUST NOT contain data transformations or business logic
   - MUST only consume data from hooks
-- **Hooks (`hooks/`)** — domain logic: data fetching via react-admin, filter conversion, state transforms.
+- **Hooks** — domain logic: data fetching, filter conversion, state transforms.
   - MUST NOT contain JSX or render anything
   - MUST NOT contain raw `fetch`/`axios` calls — delegate to services
-- **Services (`services/`)** — network calls beyond standard CRUD. Pure functions, no React.
+- **Services** — network calls beyond standard CRUD. Pure functions, no React.
   - MUST NOT import React, use hooks, or contain JSX
-- **Config (`config.ts`)** — constants only: FIXED_COLUMNS, OPTIONAL_COLUMNS.
 
 Dependency direction: `ui/ → hooks/ → services/` — MUST NOT reverse. Ever.
 
 ## Key Rules — HARD RULES
 
-- **HARD RULE (sonar no-fly):** read `.claude/skills/react-admin-patterns/references/sonar-no-fly.md` before writing any `.ts`/`.tsx`. MUI `Grid` / `InputProps` are deprecated — use Grid2 + `slotProps`. Never `parseInt` (use `Number.parseInt(x, 10)`). Never array-index React keys. Optional chain over `&&` guards. If in doubt, reread that file — it's 120 lines and it saves a PR cycle.
 - HARD RULE: If something isn't in a template and isn't in `references/arch-*.md`, STOP and ask team lead
 - HARD RULE: Read Business Rules section FIRST before writing any conditional logic
 - HARD RULE: Touch ONLY files assigned by team lead — do NOT modify shared files unless you are the designated owner
 - **HARD RULE (size + test co-existence — self-check only, no commands):** every non-test source file you create or modify MUST stay within the caps below, and every new non-test source file MUST have a planned co-located `*.test.ts` / `*.test.tsx` entry (written by Pete, not you) already listed in the plan's File Layout table. You verify both by **reading**, never by running a shell command. See "Self-Check Before Marking Done" below.
-- MUST include `operationCountry_eq` in ALL OData filters
-- MUST use `_eq` suffix for ALL exact match filters
 - MUST NOT create barrel files (`index.ts` exports)
 - MUST NOT put data fetching in UI files — wrap in hooks
 - MUST NOT put JSX in hooks — hooks return data, UI renders it
-- MUST use `@yourorg/shared` components before creating new ones
+- MUST use the shared component library before creating new components
 - MUST follow existing patterns from the closest similar feature
 
 ## Self-Check Before Marking an IMP Task Done — NO COMMANDS
@@ -162,7 +139,7 @@ Open each file you created or substantially modified in your editor / `Read` too
 | UI component (`.tsx`) | `ui/`, `pages/**/ui/`, `components/` | **300 lines** | ≤ 150 lines |
 | Hook (`.ts`) | `hooks/` | **300 lines** | ≤ 200 lines |
 | Service / helper (`.ts`) | `services/`, `utils/`, `helpers/` | **300 lines** | ≤ 200 lines |
-| Config / resource file (`.ts`, `.tsx`) | `config.ts`, `admin/resources/` | **300 lines** | ≤ 200 lines |
+| Config / resource file (`.ts`, `.tsx`) | `config.ts`, resource registration | **300 lines** | ≤ 200 lines |
 
 Lines = total lines of the file as it sits on disk, including imports and whitespace.
 

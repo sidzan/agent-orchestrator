@@ -17,26 +17,19 @@ You explore the codebase to understand what exists before implementation begins.
 
 ## Your Workflow
 
-1. Read `references/arch-overview.md` for project overview and app file trees
-2. Read `references/arch-admin-resources.md` for existing resources
-3. Read `.claude/skills/react-admin-patterns/references/components.md` for available shared components
-4. If feature needs a list → read `references/arch-list-patterns.md`
-5. If feature needs details/forms → read `references/arch-detail-patterns.md`
-6. If new OData resource → read `references/arch-api-to-feature.md` for the full checklist
-7. Explore `apps/<APP>/src/pages/` to find the closest existing feature
-8. Check `packages/ui/config/Resources.ts` if a new OData resource is needed
-9. **Check `apps/<APP>/src/services/data/useDataProvider.ts`** for existing custom API methods
+1. Read `references/arch-overview.md` for project overview and app file trees (if present)
+2. Read any other `references/arch-*.md` files relevant to the feature type
+3. Explore `{{CONFIG.apps[0].path}}` (and equivalents for other apps) to find the closest existing feature
+4. **Files to create / modify:** Determined per-feature by reading `references/` or, if absent, the existing code under {{CONFIG.apps[0].path}}.
 
 ## What to Report
 
 - Closest existing feature to use as template (with file paths)
-- **Canonical list page pattern** — identify the best existing list to use as template (e.g., `CustomersList.tsx`, `EmployeeList.tsx`)
-- Components available for reuse from `@yourorg/shared` and `@/components`
+- Components available for reuse from the shared component library
 - Suggested directory structure for the new feature
-- Whether `packages/ui/config/Resources.ts` needs a new entry
-- Any domain types needed from `packages/ui/domain/`
-- **Whether the feature needs a custom data provider method** registered in `useDataProvider.ts` — check if similar API methods already exist there
-- **Translation keys needed** — identify the namespace pattern (e.g., `resources.<feature>.name`, `resources.<feature>.fields.<field>`)
+- Whether a new resource / data-provider registration is needed
+- Any domain types needed
+- Whether the feature needs a custom data-fetching method — check if similar API methods already exist in the data-fetching layer
 
 ## Task Tracking
 
@@ -53,11 +46,10 @@ After completing exploration, you MUST output the following Exploration Passport
 |-------|-------|
 | Template file | <path within templates/> |
 | Reusable components | |
-| Resources.ts update | YES / NO |
+| Resource registration needed | YES / NO |
 | New domain types | |
 | Custom API needed | YES / NO |
 | Has UI | YES / NO |
-| Translation namespace | |
 | Gotchas from similar features | |
 | Closest existing feature | |
 ```

@@ -46,7 +46,7 @@ Create TASK.md with bug context.
 Trigger this gate if ANY of the following is true after B3:
 - Root Cause Report confidence is Medium or Low.
 - More than one plausible fix exists and they have different blast radius (e.g. "patch symptom" vs "fix upstream data flow" vs "rework the feature").
-- The fix would touch > 1 file OR an always-shared file (Resources.ts, admin.tsx, useDataProvider.ts, translation file).
+- The fix would touch > 1 file OR an always-shared file (resource registration, data-provider registration, or a shared translation file).
 - The root cause implicates a broader architectural pattern, not a single-line oversight.
 
 If NONE of the above: the fix is a targeted one-line/one-file patch — skip this gate and go straight to B4. Say so out loud.

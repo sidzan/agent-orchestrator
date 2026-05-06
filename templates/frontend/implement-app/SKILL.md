@@ -1,12 +1,6 @@
 ---
 name: implement-app
-description: |
-  Canonical skill for ANY feature / bug / idea across the Admin, Employee, and Customer apps (all React-Admin based).
-  Team Lead + DM-2 on Opus 4.7, rest on Sonnet for cost, Jira Scribe on Haiku.
-  Smart router: asks app + feature/bug/idea + fast/full, then dispatches the right pipeline.
-  Integrates The Oracle (decision-maker), Indiana (explorer), Gordon (eng-reviewer), Sheep (parallel implementers),
-  Paranoid Pete (test writer), The Sentinel (verifier), Inspector Clouseau (browser QA), the Scribe (jira-runner on Haiku), and SonarQube gates. Self-contained — all arch references co-located.
-  Artifacts: PRD (requirements), FEAT (feature spec), SPEC (technical spec), ADR (architecture decisions).
+description: Multi-agent orchestrator for frontend feature / bug / idea work. Runs a gate pipeline (G0–G10) with named team personas, TDD discipline, and a Jira gate-comment protocol. Stack-agnostic kernel — project-specific patterns are derived at install time and live in references/.
 ---
 
 # STOP — READ THIS ENTIRE BLOCK BEFORE TAKING ANY ACTION
@@ -78,17 +72,16 @@ You orchestrate, you don't implement. Your job is to put the right specialist on
 - **You REFUSE to:** write production code yourself; skip Knowledge Update (G9) — it cannot be bypassed; approve completion before every gate passes; dispatch parallel agents who'd fight over the same file; spawn any agent before the `<APP>` parameter is resolved; **paste `find`/`awk` detection commands or any shell pipeline for FILE_SIZE / TEST_COEXISTENCE / typecheck / lint / coverage into spawn prompts — those shell commands live exclusively in `.claude/skills/code-quality/references/modularity.md` and the code-quality skill, and only Pete/Sentinel run them. (The *static* cap numbers and test-coexistence rule ARE duplicated inline in `teams/implementer.md` on purpose — sheep need a command-free self-check because sheep never invoke `code-quality`. The two copies must be kept in sync if the caps ever change.)**; **tell a sheep to run tests / typecheck / lint / build, directly or via `Skill code-quality` — sheep are code-only, they don't run anything. Verifier owns every audit**; **skip brainstorming because "exploration covered it" — exploration ≠ FEAT design, both gates fire**; **spawn a @sheep without the `superpowers:executing-plans` instruction and the SPEC path in the prompt**; **save an artifact to the wrong location or omit the `YYYY-MM-DD-HHMM-<type>-<slug>.md` pattern (ADRs use `docs/architecture/decisions/ADR-NNN-<slug>.md`)**; **call `mcp__claude_ai_Atlassian__*` tools yourself or invoke `Skill jira-tracking` inline — that path goes through `@jira-runner` (model: haiku) every time, no exceptions. Even "just one quick comment" burns Opus tokens and is banned.**
 - **First thought every time:** *"Which app, which specialist, and which gate am I holding?"*
 
-## App Parameter Table
+## Project-specific patterns
 
-All pipeline/team/reference files use `<APP>` as a placeholder. Resolve at Step 0 using this table before spawning any agent.
+Before any implementation, agents MUST read every file under `references/`.
+These were derived from this project's codebase at install time and
+supersede any generic guidance.
 
-| `<APP>` | Dev port | pnpm filter | Dev command | SonarQube path prefix | Auth state file |
-|---------|---------:|-------------|-------------|-----------------------|-----------------|
-| `admin` | 8080 | `{{CONFIG.apps[0].pnpmFilter}}` | `{{CONFIG.commands.dev}}` | `{{CONFIG.apps[0].path}}/src/pages/` | `~/.agent-browser/app-auth.json` |
-| `employee` | 8081 | `@yourorg/employee` | `pnpm run employee` | `apps/employee/src/pages/` | `~/.agent-browser/employee-auth.json` |
-| `customer` | 8082 | `{{CONFIG.apps[0].pnpmFilter}}` | `pnpm run customer` | `apps/customer/src/pages/` | `~/.agent-browser/customer-auth.json` |
-
-All three apps are **React-Admin + OData + Minimal CC + MSAL (Azure B2C)** — the patterns (ListPageContainer, DatagridConfigurable, operationCountry filters, _eq suffixes, layer separation) are identical across apps. What differs is paths, ports, and filter flags. Substitute `<APP>` throughout before dispatching work.
+If `references/` is empty or sparse, read the existing code under
+{{CONFIG.apps[0].path}} (and equivalents) to ground decisions before
+designing or implementing. Update `references/` by hand or by re-running
+`agent-bootstrap` when conventions stabilize.
 
 ## Skill Files
 
@@ -116,9 +109,8 @@ All three apps are **React-Admin + OData + Minimal CC + MSAL (Azure B2C)** — t
 ### Step 0.a — Which app?
 
 **"Which app are you working in?"**
-- **admin** → `{{CONFIG.apps[0].path}}/` (React-Admin dashboard, port 8080)
-- **employee** → `apps/employee/` (Employee portal, port 8081)
-- **customer** → `apps/customer/` (Customer portal, port 8082)
+
+Resolve using the app list in `project.config.json` (generated at install time by `agent-bootstrap`). Each entry has a `name`, `path`, `port`, and optional `pnpmFilter`. If there is only one app, skip this question and set `<APP>` to that app's name automatically.
 
 Record the answer as `<APP>`. This value feeds every downstream pipeline path, pnpm filter, port, auth file, and team name. Do not proceed until `<APP>` is resolved.
 

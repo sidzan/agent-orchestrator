@@ -18,30 +18,32 @@ You review the written plan before implementation starts.
 
 ### Pass 1 (G3a): Architecture Review
 
+Read `references/arch-*.md` before running this pass — the project-specific pattern names live there.
+
 Rate each dimension PASS or FAIL with one-line finding:
 
 | Dimension | Check |
 |-----------|-------|
 | Data flow | Service → hook → UI? No data fetching in UI components? |
-| Arch compliance | Uses ListPageContainer, DatagridConfigurable, DetailsPageWithTabs? |
+| Arch compliance | Uses the project's canonical list/detail/form patterns (check `references/`)? |
 | FEAT coverage | All acceptance criteria from the FEAT document addressed in SPEC tasks? |
 | Business rules coverage | All business rules from the FEAT addressed in SPEC tasks? |
 | ADR alignment | If an ADR was written at G1.5, does the SPEC follow its Decision? |
 | Test plan | Every new file has a corresponding test task? Edge cases listed? |
 | Error handling | Loading, empty, error states planned? API errors caught? |
-| Translation | All user-visible strings use translation keys? |
-| operationCountry | All OData calls include operationCountry_eq? All updates include operationCountry? |
+| i18n | All user-visible strings use the project's i18n layer (if applicable)? |
+| Required filter fields | All data queries include any mandatory filter fields specified in `references/arch-*.md`? |
 
 ### Pass 2 (G3b, only if Has UI = YES): UI Review
 
-Read `references/arch-list-patterns.md` and `references/arch-detail-patterns.md`.
+Read the project-specific UI pattern docs in `references/` before running this pass.
 
 | Dimension | Check |
 |-----------|-------|
 | Component hierarchy | Container → hooks → UI? No JSX in hooks? |
 | States covered | Loading, empty, error, success planned? |
-| Pattern compliance | Minimal CC components used (no raw MUI Table, no custom tab logic)? |
-| Interaction patterns | Buttons in TopToolbar, forms in Drawers/dialogs, dialogs toggle-based? |
+| Pattern compliance | Shared component library used (no raw table components, no custom tab logic)? |
+| Interaction patterns | Buttons in toolbar, forms in drawers/dialogs, dialogs toggle-based? |
 | **Component decomposition** | Every row in the SPEC's File Layout table is within the cap defined in `.claude/skills/code-quality/references/modularity.md`. Any projected over-cap file = FAIL; SPEC must pre-split per the "How to Split" patterns in that file. |
 | **Test plan per file** | For every new source file in the SPEC (UI, hook, service, validator, helper), a matching test task exists. ZERO untested source files allowed. |
 
@@ -50,12 +52,12 @@ Read `references/arch-list-patterns.md` and `references/arch-detail-patterns.md`
 ```
 PASS 1 (Architecture):
 - Data flow: PASS
-- Arch compliance: FAIL — plan uses raw MUI Table in step 4, should use DatagridConfigurable
+- Arch compliance: FAIL — plan uses a raw table in step 4, should use the project's canonical list container
 - Business rules: PASS
 - Test plan: FAIL — hook useFeatureData has no test task
 - Error handling: PASS
-- Translations: PASS
-- operationCountry: PASS
+- i18n: PASS
+- Required filter fields: PASS
 
 PASS 2 (UI):
 - Component hierarchy: PASS

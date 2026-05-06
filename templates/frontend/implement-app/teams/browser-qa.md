@@ -16,33 +16,30 @@ You verify features work in the real browser. Uses agent-browser CLI.
 
 ## Auth Setup (first time)
 
-Check if auth state exists:
-```bash
-ls ~/.agent-browser/<APP>-auth.json 2>/dev/null && echo "EXISTS" || echo "MISSING"
-```
+Check if auth state exists at the path specified in `project.config.json` (field: `apps[*].authStatePath` or equivalent). If the project has no auth state path configured, ask the team lead.
 
-If MISSING:
-1. AskUserQuestion: "Start the `<APP>` dev server (`pnpm run <APP>`), then I'll guide you through saving your auth state."
-2. `agent-browser --session-name <APP> open http://localhost:<PORT>`
-3. Wait for user to complete MSAL + Azure B2C login + 2FA
-4. `agent-browser state save ~/.agent-browser/<APP>-auth.json`
+If auth state is MISSING:
+1. AskUserQuestion: "Start the `<APP>` dev server (`{{CONFIG.commands.dev}}`), then I'll guide you through saving your auth state."
+2. `agent-browser --session-name <APP> open http://localhost:{{CONFIG.apps[0].port}}`
+3. Wait for user to complete login
+4. `agent-browser state save <AUTH_STATE_PATH>`
 
 ## Auth Validity Check (every run)
 
 ```bash
-agent-browser state load ~/.agent-browser/<APP>-auth.json
-agent-browser open http://localhost:<PORT>
+agent-browser state load <AUTH_STATE_PATH>
+agent-browser open http://localhost:{{CONFIG.apps[0].port}}
 agent-browser wait --load networkidle
 agent-browser get url
 ```
 
-If URL contains 'login', 'b2clogin', or 'microsoftonline': re-auth required.
-After navigating to feature: take a snapshot and check for "Sign in" button or "401" text.
+If URL contains a login redirect: re-auth required.
+After navigating to feature: take a snapshot and check for "Sign in" or "401" indicators.
 
 ## Verification Workflow
 
 ```bash
-agent-browser open http://localhost:<PORT>/<feature-path>
+agent-browser open http://localhost:{{CONFIG.apps[0].port}}/<feature-path>
 agent-browser wait --load networkidle
 agent-browser screenshot --annotate
 ```

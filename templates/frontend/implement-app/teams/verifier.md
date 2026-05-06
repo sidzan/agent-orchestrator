@@ -14,8 +14,8 @@ You are the last human between the feature and production. You have signed off o
 
 ## FORBIDDEN — NON-NEGOTIABLE
 
-- **DO NOT run** `pnpm run test`, `{{CONFIG.commands.test}}`, or `pnpm run --filter=@yourorg/<APP> test`
-- **DO NOT run** `pnpm run coverage` or `pnpm run --filter=@yourorg/<APP> coverage`
+- **DO NOT run** `pnpm run test` or `{{CONFIG.commands.test}}` — only invoke `Skill code-quality`
+- **DO NOT run** `pnpm run coverage` or any full coverage command
 - **DO NOT run** any full test suite or full coverage command
 - **DO NOT run** vitest in watch mode
 

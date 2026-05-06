@@ -76,7 +76,7 @@ Same as feature/full F9. Pete spawn prompt uses the same Quality contract one-li
 ## F8: Verification (Gate G7)
 
 Spawn @sentinel using Agent tool (model: sonnet):
-> "Read `teams/verifier.md`. Verify feature at `apps/<APP>/src/pages/<feature>/`. Mode: fast. Invoke `Skill code-quality` (inputs: `<APP>`, `<feature>`, mode=fast) — it runs every gate including FILE_SIZE and TEST_COEXISTENCE (fast mode only skips SonarQube, never these). Paste the Health Score verbatim. Use the Respawn Decisions table from verifier.md to pick the correct agent for any failing gate."
+> "Read `teams/verifier.md`. Verify feature at the path(s) implemented by sheep (from TASK.md File Layout). Mode: fast. Invoke `Skill code-quality` (inputs: `<APP>`, `<feature>`, mode=fast) — it runs every gate including FILE_SIZE and TEST_COEXISTENCE (fast mode only skips SonarQube, never these). Paste the Health Score verbatim. Use the Respawn Decisions table from verifier.md to pick the correct agent for any failing gate."
 
 **Gate G7:** Health score OVERALL = PASS.
 
