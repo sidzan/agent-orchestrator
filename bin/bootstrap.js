@@ -254,7 +254,7 @@ function postInstallMessage({ stacks, integrations, installed }) {
   if (integrations.mcp) {
     log(`  ${n++}. Configure MCP:                cp .mcp.json.example .mcp.json (fill in secrets)`);
   }
-  log(`  ${n++}. Edit EDIT-ME starter references in .claude/skills/*/references/ to match your stack`);
+  log(`  ${n++}. Review .claude/skills/*/references/ — derived from your codebase by claude. Edit by hand if needed.`);
   log(`  ${n++}. Try it:                       /implement-app or /implement-backend in Claude Code`);
 }
 
