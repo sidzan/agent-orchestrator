@@ -8,7 +8,7 @@
 
 ## Problem
 
-Multi-agent orchestration skills like `implement-app` (frontend, React/TypeScript) and `implement-backend` (C#/.NET) deliver real value, but they are hardwired to one project: app names, ports, pnpm filters, OData patterns, SonarQube keys, Jira keys (`PROJ`), and namespace conventions (`<vendor>_<source-project>-*`) are embedded directly in skill files.
+Multi-agent orchestration skills like `implement-app` (frontend, React/TypeScript) and `implement-backend` (C#/.NET) deliver real value, but they are hardwired to one project: app names, ports, pnpm filters, OData patterns, SonarQube keys, Jira keys, and namespace conventions (`<vendor>_<project>-*`) are embedded directly in skill files.
 
 Every new project that wants the same orchestration loop has to copy and hand-edit those files. There is no clean distribution mechanism.
 
@@ -28,7 +28,7 @@ The goal: a single CLI that drops a fresh, project-tailored copy of the orchestr
 
 - Stack support outside React (TypeScript) and C#
 - A built-in update / reconfigure mechanism (deferred — see TODO)
-- Replacing or modifying the original <SourceProject> skills (the local `implement-app/` reference stays gitignored)
+- Replacing or modifying the original private reference skills (the local `implement-app/` reference stays gitignored)
 - Auto-generating architecture documentation (user edits the EDIT-ME starter references)
 - Non-Claude-Code agent harnesses
 
@@ -36,7 +36,7 @@ The goal: a single CLI that drops a fresh, project-tailored copy of the orchestr
 
 ## Reference material
 
-`implement-app/` at this repo's root is a local copy of the original <SourceProject> frontend skill (gitignored). The C# counterpart lives at `/home/sijan/work/<source-project>-backend/.claude/skills/implement-backend/`. Both are sources of truth for gate sequences, personas, and pipeline structure. Generalization for `templates/` derives from these — they are never modified or committed.
+`implement-app/` at this repo's root is a local copy of the original private frontend skill (gitignored). The C# counterpart lives at `<your private backend skill>`. Both are sources of truth for gate sequences, personas, and pipeline structure. Generalization for `templates/` derives from these — they are never modified or committed.
 
 ---
 

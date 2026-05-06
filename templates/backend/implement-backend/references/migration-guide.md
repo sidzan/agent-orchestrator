@@ -30,17 +30,13 @@ V{major}.{minor}__{PascalCase_Description}.sql
 
 ## Target Databases
 
-Migrations run against 5 databases. The `{envName}` placeholder is replaced by the `flyway-prepare-migrations.sh` script at deployment time.
+If your project runs migrations against multiple databases (multi-region, multi-tenant, etc.), document them here. The `{envName}` placeholder is replaced at deployment time by your migration tooling.
 
-| Database | USE statement | Countries |
+| Database | USE statement | Notes |
 |---|---|---|
-| Hub | `USE [YourOrg_{envName}]` | Shared/cross-country data |
-| Norway | `USE [<DB_PREFIX>_{envName}]` | NO |
-| Denmark | `USE [<DB_PREFIX>_DK_{envName}]` | DK |
-| Finland | `USE [<DB_PREFIX>_FI_{envName}]` | FI |
-| Sweden | `USE [<DB_PREFIX>_SE_{envName}]` | SE |
+| Primary | `USE [{{DB_PREFIX}}_{envName}]` | replace with your project's database list |
 
-Most entity migrations target all 4 country databases (NO, DK, FI, SE). Hub-only migrations are rare.
+If your project uses a single database, delete this section.
 
 ## Standard Migration Sequence for New Entity
 

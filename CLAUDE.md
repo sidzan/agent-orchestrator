@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An npm package (`agent-bootstrap`, published as `sidzan/agent-bootstrap`) that drops a project-tailored multi-agent orchestration skill into any **React (TypeScript)** or **C#** project. Running `npx agent-bootstrap@latest` prompts for stack (frontend / backend / both), discovers project structure, confirms it with the user, and writes a fresh, fully-rendered skill into `.claude/skills/` — no template markers, no runtime config file.
 
-Two orchestrators ship: `implement-app` (frontend, React/TypeScript) and `implement-backend` (C#/.NET). Each comes with three bundled support skills (`jira-tracking`, `create-pull-request`, `sonar-fix`). All <SourceProject>/<SourceProject>/PROJ/<vendor> specifics are stripped out and replaced with project values at install time.
+Two orchestrators ship: `implement-app` (frontend, React/TypeScript) and `implement-backend` (C#/.NET). Each comes with three bundled support skills (`jira-tracking`, `create-pull-request`, `sonar-fix`). All internal-project specifics are stripped out and replaced with project values at install time.
 
-The originals (`implement-app/` at this repo root, and `/home/sijan/work/<source-project>-backend/.claude/skills/implement-backend/`) are gitignored references for the gate sequence, personas, and pipelines. Never commit or modify them.
+The originals (`implement-app/` at this repo root, and `<your private backend skill>`) are gitignored references for the gate sequence, personas, and pipelines. Never commit or modify them.
 
 ## Dev Commands
 
@@ -35,7 +35,7 @@ Manual test matrix (no automated tests in v1) lives at the bottom of `docs/desig
 | `templates/shared/` | `jira-tracking/`, `create-pull-request/`, `sonar-fix/` — used by both orchestrators. |
 | `templates/hooks/` | `lint-on-save.sh`, `worktree-setup.sh`, `enforce-task-update.sh`. Opt-in. |
 | `templates/mcp/` | `mcp.json.example.frontend` (Atlassian + Bitbucket + Lokalise) and `mcp.json.example.backend` (Atlassian + Bitbucket). |
-| `implement-app/` | Local <SourceProject> frontend reference. **Gitignored. Never modified, never committed.** |
+| `implement-app/` | Local private frontend reference. **Gitignored. Never modified, never committed.** |
 | `docs/design.md` | Full design spec — authoritative for CLI flow, substitution model, install policy, error handling. |
 
 ### CLI flow (3 passes + render)
@@ -76,5 +76,5 @@ Always included in `implement-app`. Auth state path (default `~/.agent-browser/`
 - `bin/bootstrap.js` ≤ 300 lines. Overflow goes to `lib/`.
 - Zero npm dependencies — Node.js built-ins only.
 - All generalization work happens under `templates/`. The `implement-app/` reference copy at the repo root is never committed or modified.
-- The package will be published at `sidzan/agent-bootstrap` on GitHub + npm. Keep skill files free of <SourceProject> / <SourceProject> / PROJ / <vendor> specifics — those values are user-supplied at install time.
+- The package will be published at `sidzan/agent-bootstrap` on GitHub + npm. Keep skill files free of internal-project specifics — those values are user-supplied at install time.
 - v1 supports React + C# only. Adding a new stack means: new branch in `lib/detect.js`, new `templates/<stack>/`, new entry in the stack-selection prompt — but is out of scope for v1.

@@ -43,7 +43,7 @@ agent-bootstrap/                  ← this repo
 ├── docs/
 │   └── design.md                ← full design spec
 ├── implement-app/               ← LOCAL REFERENCE ONLY — gitignored
-│   ├── SKILL.md                 ← original <source-project> skill (source of truth for generalization)
+│   ├── SKILL.md                 ← original private skill (source of truth for generalization)
 │   ├── teams/
 │   ├── pipelines/
 │   ├── references/
