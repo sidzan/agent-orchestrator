@@ -8,6 +8,17 @@
 
 # List Patterns Reference
 
+<!-- DISCOVER:arch-list-patterns
+  Find: in this codebase, what are the conventions for the topic
+  this file covers (see the title above). Look at existing
+  components/files to derive: file paths, library imports,
+  naming conventions, prop shapes, hard rules.
+
+  Output: replace the body of this reference with concrete
+  guidance grounded in THIS codebase. Drop any patterns from
+  libraries/frameworks the codebase does not actually use.
+-->
+
 ## HARD RULES
 - MUST use `ListPageContainer` + `DatagridConfigurable` for OData resources — NEVER raw MUI Table
 - MUST use `DatagridConfigurable`, NEVER plain `Datagrid` for main OData lists
@@ -133,3 +144,4 @@ return (
 );
 // Each item MUST have an `id` field. Use plain Datagrid, NOT DatagridConfigurable.
 ```
+<!-- /DISCOVER -->

@@ -6,6 +6,7 @@ const path = require("path");
 const { detect } = require("../lib/detect");
 const prompts = require("../lib/prompts");
 const { installSkill, installHooks, installMcp } = require("../lib/install");
+const { runDiscovery, summarize } = require("../lib/discover");
 
 const log = (msg) => process.stdout.write(`${msg}\n`);
 const err = (msg) => process.stderr.write(`${msg}\n`);
@@ -47,6 +48,70 @@ async function chooseStacks(detection) {
   const picked = await prompts.choice("\nWhich skill(s) should be installed?", opts, opts.length - 1);
   if (picked.key === "both") return ["frontend", "backend"];
   return [picked.key];
+}
+
+function micDropAndExit() {
+  log("\nyour loss! mic drop. bye");
+  prompts.close();
+  process.exit(2);
+}
+
+async function runPatternDiscovery({ cwd, stacks, fe, be }) {
+  log("\n── Pattern Discovery (required) ──");
+  log("This scans your codebase using `claude` (read-only: Read/Glob/Grep)");
+  log("to tailor the skill's references and pipeline checklists to your");
+  log("project's actual file paths, components, and conventions.");
+  log("");
+  log("  Estimated:   30–90 seconds, ~5–20K tokens");
+  log("  Cost:        billed against your existing Claude Code session");
+
+  const yes = await prompts.confirm("Run pattern discovery?", true);
+  if (!yes) micDropAndExit();
+
+  const templatesToInstall = [];
+  if (stacks.includes("frontend"))
+    templatesToInstall.push(
+      path.join(TEMPLATES, "frontend", "implement-app"),
+      path.join(TEMPLATES, "shared")
+    );
+  if (stacks.includes("backend"))
+    templatesToInstall.push(
+      path.join(TEMPLATES, "backend", "implement-backend"),
+      path.join(TEMPLATES, "shared")
+    );
+
+  const result = await runDiscovery({
+    templatesToInstall,
+    projectRoot: cwd,
+    stack: stacks,
+    apps: fe ? fe.apps : be ? [{ name: be.projectName, path: be.srcPath }] : [],
+    log,
+  });
+
+  if (!result.ok) {
+    if (result.reason === "no-claude") {
+      err("\nclaude CLI not found on PATH.");
+      micDropAndExit();
+    }
+    if (result.reason === "no-tags") {
+      log("(no DISCOVER tags found in selected templates — skipping)");
+      return null;
+    }
+    err(`\nDiscovery failed: ${result.reason}`);
+    if (result.logPath) err(`See ${result.logPath} for details.`);
+    if (result.stderr) err(result.stderr.split("\n").slice(0, 10).join("\n"));
+    log("\nProceeding with ship-as-is fallback content for all sections.");
+    return {};
+  }
+
+  const summary = summarize(result.map);
+  log(`\n── Pattern Discovery — results ──`);
+  for (const id of summary.derived) log(`  ✓ ${id}  (derived)`);
+  for (const id of summary.fallback) log(`  ⚠ ${id}  (fallback)`);
+  log(
+    `\nSections derived: ${summary.derived.length}/${result.tagCount}.  Fallback: ${summary.fallback.length}/${result.tagCount}.`
+  );
+  return result.map;
 }
 
 async function confirmFrontend(fe) {
@@ -236,6 +301,15 @@ async function main() {
   const integrations = await gatherIntegrations(stacks);
   const projectName = path.basename(cwd);
 
+  // Pass 4 — Pattern Discovery (mandatory: hard exit if claude is missing or
+  // the user declines).
+  const discoveryMap = await runPatternDiscovery({
+    cwd,
+    stacks,
+    fe,
+    be,
+  });
+
   const installed = [];
 
   if (fe) {
@@ -248,6 +322,7 @@ async function main() {
       config: cfg,
       prompts,
       log,
+      discoveryMap,
     });
     installed.push(`.claude/skills/${main.skillName}`);
     for (const sub of ["jira-tracking", "create-pull-request", "sonar-fix"]) {
@@ -265,6 +340,7 @@ async function main() {
         config: cfg,
         prompts,
         log,
+        discoveryMap,
       });
       installed.push(`.claude/skills/${r.skillName}`);
     }
@@ -280,6 +356,7 @@ async function main() {
       config: cfg,
       prompts,
       log,
+      discoveryMap,
     });
     installed.push(`.claude/skills/${main.skillName}`);
     if (!fe) {
@@ -299,6 +376,7 @@ async function main() {
           config: cfg,
           prompts,
           log,
+          discoveryMap,
         });
         installed.push(`.claude/skills/${r.skillName}`);
       }

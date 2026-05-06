@@ -8,6 +8,17 @@
 
 # Form Patterns (Admin)
 
+<!-- DISCOVER:arch-form-patterns
+  Find: in this codebase, what are the conventions for the topic
+  this file covers (see the title above). Look at existing
+  components/files to derive: file paths, library imports,
+  naming conventions, prop shapes, hard rules.
+
+  Output: replace the body of this reference with concrete
+  guidance grounded in THIS codebase. Drop any patterns from
+  libraries/frameworks the codebase does not actually use.
+-->
+
 Key patterns for React Hook Form in create/edit forms.
 
 ## FormError — Server Error Display
@@ -56,3 +67,4 @@ Prefer `getActiveCountryCode()` from `@yourorg/shared/domain` over any hardcoded
 - `setValue` without `{ shouldDirty: true }` silently breaks form submission — always pass it
 - Only user-editable values belong in React Hook Form state — lookup/reference IDs stay in source arrays
 - Never rely on `useRecordContext` for form init inside paginated lists — use external state
+<!-- /DISCOVER -->

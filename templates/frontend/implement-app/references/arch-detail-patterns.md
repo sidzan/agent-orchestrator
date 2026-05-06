@@ -8,6 +8,17 @@
 
 # Detail Patterns Reference
 
+<!-- DISCOVER:arch-detail-patterns
+  Find: in this codebase, what are the conventions for the topic
+  this file covers (see the title above). Look at existing
+  components/files to derive: file paths, library imports,
+  naming conventions, prop shapes, hard rules.
+
+  Output: replace the body of this reference with concrete
+  guidance grounded in THIS codebase. Drop any patterns from
+  libraries/frameworks the codebase does not actually use.
+-->
+
 ## HARD RULES
 - MUST use `DetailsPageWithTabs` — NEVER build custom tab logic
 - Tab icons MUST use Iconify strings (e.g. `'solar:user-id-bold'`)
@@ -151,3 +162,4 @@ export const FeatureItemsList = () => {
   );
 };
 ```
+<!-- /DISCOVER -->

@@ -8,6 +8,17 @@
 
 # Shared Components — Reference
 
+<!-- DISCOVER:arch-shared-components
+  Find: in this codebase, what are the conventions for the topic
+  this file covers (see the title above). Look at existing
+  components/files to derive: file paths, library imports,
+  naming conventions, prop shapes, hard rules.
+
+  Output: replace the body of this reference with concrete
+  guidance grounded in THIS codebase. Drop any patterns from
+  libraries/frameworks the codebase does not actually use.
+-->
+
 ## HARD RULES
 
 - ALWAYS check `@yourorg/shared` and `@yourorg/minimal` before creating any new UI component
@@ -58,3 +69,4 @@ Prefer `DateInputUTC` or `MonthYearPicker` from `@yourorg/shared/components/Date
 
 - Use `Iconify` from `@yourorg/minimal/components/iconify` for all icons (100K+ SVG icons via Iconify CDN)
 - Do NOT import icons directly from `@mui/icons-material` unless no Iconify equivalent exists
+<!-- /DISCOVER -->

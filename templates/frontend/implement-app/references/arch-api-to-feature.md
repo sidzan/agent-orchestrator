@@ -8,57 +8,31 @@
 
 # API to Feature Checklist
 
-Complete checklist for turning an OData endpoint into a full admin feature.
+Complete checklist for turning a backend endpoint into a full admin feature.
 
 ## Step-by-Step
 
-- [ ] **1. `packages/ui/config/Resources.ts`** — Add new enum key before any other step
-  ```typescript
-  WIDGETS = 'widgets',
-  ```
+<!-- DISCOVER:api-to-feature-checklist
+  Find: in this codebase, what are the concrete steps an engineer follows
+  to take a new backend endpoint and surface it as an admin/CRUD feature
+  in the UI. Look for: where domain types live, where services/data
+  providers are wired, where resources are registered, the directory
+  shape under each feature folder, and any translation/i18n step.
 
-- [ ] **2. Domain type** — `packages/ui/domain/<feature>/<Feature>.ts`
-  - Include `id: string`, `operationCountry: string` (REQUIRED), all fields camelCased
-  - Nullable backend types → `T | null`; `Guid` → `string`; `DateTime` → `string`; navigation properties → optional (`entity?: Type`)
-
-- [ ] **3. Service file** — `apps/<APP>/src/pages/<feature>/services/<feature>Service.ts`
-  - Only needed for custom REST calls beyond standard OData CRUD
-
-- [ ] **4. Register in data provider** — `apps/<APP>/src/services/data/useDataProvider.ts`
-  - Add to `AdminDataProvider` interface + wire into `updatedProvider` object
-
-- [ ] **5. Resource file** — `apps/<APP>/src/resources/<feature>.tsx`
-  ```typescript
-  export const widgets: ResourceProps = {
-    name: Resources.WIDGETS,
-    list: <WidgetList />,
-    show: <WidgetDetails />,
-    options: { label: 'resources.widgets.name', group: NAVBAR_GROUPS.MANAGEMENT },
-  };
-  ```
-
-- [ ] **6. Register in `apps/<APP>/src/admin.tsx`** — `<Resource {...widgets} />`
-
-- [ ] **7. Feature directory structure**
-  ```
-  apps/<APP>/src/pages/<feature>/
-  ├── config.ts              # FIXED_COLUMNS, OPTIONAL_COLUMNS, constants
-  ├── list/
-  │   └── ui/
-  │       ├── <Feature>List.tsx
-  │       └── <Feature>List.test.tsx
-  ├── details/
-  │   └── ui/
-  │       ├── <Feature>Details.tsx
-  │       └── general/<Feature>General.tsx
-  └── create/
-      └── ui/
-          └── <Feature>Create.tsx
-  ```
-
-- [ ] **8. Translation keys** — Add to Lokalise (run `pnpm --filter=@yourorg/<APP> lokalise`)
-  - `resources.<feature>.name` — display name (plural)
-  - `resources.<feature>.fields.<fieldName>` — column/input labels
+  Output: a numbered checklist (markdown checkboxes) of 5–10 steps with
+  concrete file paths from THIS codebase. Each step should mention the
+  exact file or directory pattern an engineer should create or edit.
+  Where a code snippet helps clarify the step, include a short fenced
+  block. Do NOT include patterns from libraries the codebase does not
+  actually import (e.g., react-admin if not present).
+-->
+- [ ] **1. Domain type** — wherever this codebase keeps domain models
+- [ ] **2. Service file** — wherever this codebase keeps API/service wrappers
+- [ ] **3. Register in data provider / API layer** — the codebase's existing data-fetching wiring
+- [ ] **4. Resource / route registration** — where the new feature is exposed as a route or registered in any admin/router config
+- [ ] **5. Feature directory** — follow whatever per-feature folder shape this codebase uses
+- [ ] **6. Translations / i18n** — if the codebase uses an i18n library, add keys there
+<!-- /DISCOVER -->
 
 ## Field Type Mapping
 
