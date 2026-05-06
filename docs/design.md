@@ -39,6 +39,12 @@ The per-project `project.config.json` is the only generated artifact that varies
 
 ---
 
+## Reference Material
+
+`implement-app/` at the repo root is a local copy of the original <source-project> skill (gitignored — not published).
+It is the source of truth for the gate sequence, team personas, pipeline files, and artifact convention.
+All generalization work for `core/implement-app/` starts from this reference.
+
 ## Package Structure
 
 ```
