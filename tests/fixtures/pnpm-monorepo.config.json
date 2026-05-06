@@ -1,0 +1,31 @@
+{
+  "project": { "name": "demo-mono", "packageManager": "pnpm", "monorepo": true },
+  "apps": [
+    {
+      "name": "@demo/admin",
+      "path": "apps/admin",
+      "port": 8000,
+      "pnpmFilter": "@demo/admin",
+      "devCommand": "pnpm --filter @demo/admin dev",
+      "testCommand": "pnpm --filter @demo/admin test",
+      "lintCommand": "pnpm --filter @demo/admin lint",
+      "typecheckCommand": "pnpm --filter @demo/admin typecheck",
+      "buildCommand": "pnpm --filter @demo/admin build",
+      "sonarPathPrefix": "apps/admin/src/"
+    }
+  ],
+  "stack": { "framework": "react-admin", "buildTool": "vite", "testRunner": "vitest", "styling": "@mui/material" },
+  "commands": {
+    "dev": "pnpm --filter @demo/admin dev",
+    "test": "pnpm --filter @demo/admin test",
+    "lint": "pnpm --filter @demo/admin lint",
+    "typecheck": "pnpm --filter @demo/admin typecheck",
+    "build": "pnpm --filter @demo/admin build"
+  },
+  "integrations": {
+    "jira": { "enabled": true, "baseUrl": "https://demo.atlassian.net", "projectKey": "ADMIN" },
+    "sonar": { "enabled": true, "projectKey": "demo_admin" }
+  },
+  "browserQA": { "enabled": true, "authStatePath": "~/.agent-browser" },
+  "_resolvedSkillName": "implement-app"
+}

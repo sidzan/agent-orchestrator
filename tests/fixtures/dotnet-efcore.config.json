@@ -1,0 +1,26 @@
+{
+  "project": { "name": "demo-be-efcore", "packageManager": "none", "monorepo": false },
+  "apps": [],
+  "backend": {
+    "solutionPath": "Demo.sln",
+    "projectName": "Demo",
+    "srcPath": "src",
+    "testsPath": "tests",
+    "csprojCount": 3,
+    "migrationTool": "efcore",
+    "commands": { "test": "dotnet test", "build": "dotnet build", "lint": "dotnet format" }
+  },
+  "commands": {
+    "test": "dotnet test",
+    "build": "dotnet build",
+    "lint": "dotnet format",
+    "typecheck": "dotnet build",
+    "dev": "dotnet run"
+  },
+  "integrations": {
+    "jira": { "enabled": false },
+    "sonar": { "enabled": false }
+  },
+  "browserQA": { "enabled": false },
+  "_resolvedSkillName": "implement-backend"
+}

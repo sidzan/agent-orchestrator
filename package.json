@@ -1,6 +1,6 @@
 {
   "name": "agent-bootstrap",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Bootstrap a project-tailored multi-agent orchestration skill into any React or C# project.",
   "bin": {
     "agent-bootstrap": "bin/bootstrap.js"
@@ -10,10 +10,15 @@
     "bin/",
     "lib/",
     "templates/",
-    "README.md"
+    "README.md",
+    "docs/templating.md"
   ],
   "scripts": {
-    "start": "node bin/bootstrap.js"
+    "start":                "node bin/bootstrap.js",
+    "lint:templates":       "node lib/template-lint.js",
+    "test:snapshot":        "node tests/snapshot.js",
+    "test:snapshot:update": "node tests/snapshot.js --update",
+    "test":                 "npm run lint:templates && npm run test:snapshot"
   },
   "engines": {
     "node": ">=18"

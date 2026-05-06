@@ -19,6 +19,22 @@ function abort(message, code = 1) {
   process.exit(code);
 }
 
+function abortOnInstallFailure(result, name) {
+  if (result.ok) return result;
+  err(`\n✖ Failed to install ${name}.`);
+  err(`The render produced ${result.errors?.length || 0} error(s); nothing was written.`);
+  if (result.errors) {
+    for (const e of result.errors.slice(0, 15)) {
+      const loc = e.file || (e.path ? `CONFIG.${e.path}` : "<config>");
+      err(`  [${e.kind}] ${loc}: ${e.message}`);
+    }
+  }
+  err(`\nThis is a bug in the kernel templates or in the config builder.`);
+  err(`File a report at https://github.com/sidzan/agent-orchestrator/issues with the above output.`);
+  prompts.close();
+  process.exit(3);
+}
+
 function isProjectRoot(cwd) {
   return (
     fs.existsSync(path.join(cwd, "package.json")) ||
@@ -218,12 +234,18 @@ function frontendConfig(fe, integrations, projectName) {
 
 function backendConfig(be, integrations, projectName) {
   return {
-    project: { name: projectName },
+    project: {
+      name: projectName,
+      packageManager: "none",
+      monorepo: false,
+    },
+    apps: [],
     backend: {
       solutionPath: be.solutionPath,
       projectName: be.projectName,
       srcPath: be.srcPath,
       testsPath: be.testsPath,
+      csprojCount: be.csprojCount,
       migrationTool: be.migrationTool,
       commands: be.commands,
     },
@@ -238,6 +260,7 @@ function backendConfig(be, integrations, projectName) {
           }
         : { enabled: false },
     },
+    browserQA: { enabled: false },
   };
 }
 
@@ -290,22 +313,25 @@ async function main() {
   if (fe) {
     const cfg = frontendConfig(fe, integrations, projectName);
     log("\n── Installing frontend skill ──");
-    const main = await installSkill({
-      projectRoot: cwd,
-      templateDir: path.join(TEMPLATES, "frontend", "implement-app"),
-      skillName: "implement-app",
-      config: cfg,
-      prompts,
-      log,
-    });
-    installed.push(`.claude/skills/${main.skillName}`);
+    const mainResult = abortOnInstallFailure(
+      await installSkill({
+        projectRoot: cwd,
+        templateDir: path.join(TEMPLATES, "frontend", "implement-app"),
+        skillName: "implement-app",
+        config: cfg,
+        prompts,
+        log,
+      }),
+      "implement-app"
+    );
+    installed.push(`.claude/skills/${mainResult.skillName}`);
 
     // Pass 4 — Discovery runs after the kernel is in place, targeting the
     // resolved skill dir (which may have been renamed via rename-on-conflict).
     await runPatternDiscovery({
       cwd,
       stacks: ["frontend"],
-      resolvedSkillDir: main.target,
+      resolvedSkillDir: mainResult.target,
       fe,
     });
 
@@ -317,14 +343,17 @@ async function main() {
             ? cfg.integrations.sonar.enabled
             : true;
       if (!enabled) continue;
-      const r = await installSkill({
-        projectRoot: cwd,
-        templateDir: path.join(TEMPLATES, "shared", sub),
-        skillName: sub,
-        config: cfg,
-        prompts,
-        log,
-      });
+      const r = abortOnInstallFailure(
+        await installSkill({
+          projectRoot: cwd,
+          templateDir: path.join(TEMPLATES, "shared", sub),
+          skillName: sub,
+          config: cfg,
+          prompts,
+          log,
+        }),
+        sub
+      );
       installed.push(`.claude/skills/${r.skillName}`);
     }
   }
@@ -332,22 +361,25 @@ async function main() {
   if (be) {
     const cfg = backendConfig(be, integrations, projectName);
     log("\n── Installing backend skill ──");
-    const main = await installSkill({
-      projectRoot: cwd,
-      templateDir: path.join(TEMPLATES, "backend", "implement-backend"),
-      skillName: "implement-backend",
-      config: cfg,
-      prompts,
-      log,
-    });
-    installed.push(`.claude/skills/${main.skillName}`);
+    const mainResult = abortOnInstallFailure(
+      await installSkill({
+        projectRoot: cwd,
+        templateDir: path.join(TEMPLATES, "backend", "implement-backend"),
+        skillName: "implement-backend",
+        config: cfg,
+        prompts,
+        log,
+      }),
+      "implement-backend"
+    );
+    installed.push(`.claude/skills/${mainResult.skillName}`);
 
     // Pass 4 — Discovery runs after the kernel is in place, targeting the
     // resolved skill dir (which may have been renamed via rename-on-conflict).
     await runPatternDiscovery({
       cwd,
       stacks: ["backend"],
-      resolvedSkillDir: main.target,
+      resolvedSkillDir: mainResult.target,
       be,
     });
 
@@ -361,14 +393,17 @@ async function main() {
               ? cfg.integrations.sonar.enabled
               : true;
         if (!enabled) continue;
-        const r = await installSkill({
-          projectRoot: cwd,
-          templateDir: path.join(TEMPLATES, "shared", sub),
-          skillName: sub,
-          config: cfg,
-          prompts,
-          log,
-        });
+        const r = abortOnInstallFailure(
+          await installSkill({
+            projectRoot: cwd,
+            templateDir: path.join(TEMPLATES, "shared", sub),
+            skillName: sub,
+            config: cfg,
+            prompts,
+            log,
+          }),
+          sub
+        );
         installed.push(`.claude/skills/${r.skillName}`);
       }
     }

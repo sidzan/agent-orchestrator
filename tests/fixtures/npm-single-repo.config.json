@@ -1,0 +1,24 @@
+{
+  "project": { "name": "demo-npm", "packageManager": "npm", "monorepo": false },
+  "apps": [
+    {
+      "name": "demo-npm",
+      "path": ".",
+      "port": 3000,
+      "devCommand": "npm start",
+      "testCommand": "npm test",
+      "lintCommand": "npm run lint",
+      "typecheckCommand": "npm run typecheck",
+      "buildCommand": "npm run build",
+      "sonarPathPrefix": "src/"
+    }
+  ],
+  "stack": { "framework": "react", "buildTool": "vite", "testRunner": "vitest", "styling": "tailwindcss" },
+  "commands": { "dev": "npm start", "test": "npm test", "lint": "npm run lint", "typecheck": "npm run typecheck", "build": "npm run build" },
+  "integrations": {
+    "jira": { "enabled": true, "baseUrl": "https://demo.atlassian.net", "projectKey": "DEMO" },
+    "sonar": { "enabled": true, "projectKey": "demo_npm" }
+  },
+  "browserQA": { "enabled": true, "authStatePath": "~/.agent-browser" },
+  "_resolvedSkillName": "implement-app"
+}

@@ -1,0 +1,26 @@
+{
+  "project": { "name": "demo-be-flyway", "packageManager": "none", "monorepo": false },
+  "apps": [],
+  "backend": {
+    "solutionPath": "Demo.sln",
+    "projectName": "Demo",
+    "srcPath": "src",
+    "testsPath": "tests",
+    "csprojCount": 4,
+    "migrationTool": "flyway",
+    "commands": { "test": "dotnet test", "build": "dotnet build", "lint": "dotnet format" }
+  },
+  "commands": {
+    "test": "dotnet test",
+    "build": "dotnet build",
+    "lint": "dotnet format",
+    "typecheck": "dotnet build",
+    "dev": "dotnet run"
+  },
+  "integrations": {
+    "jira": { "enabled": true, "baseUrl": "https://demo.atlassian.net", "projectKey": "BE" },
+    "sonar": { "enabled": true, "projectKey": "demo_be" }
+  },
+  "browserQA": { "enabled": false },
+  "_resolvedSkillName": "implement-backend"
+}
