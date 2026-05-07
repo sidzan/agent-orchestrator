@@ -38,6 +38,8 @@ Manual test matrix (no automated tests in v1) lives at the bottom of `docs/desig
 | `dist/` | Compiled JS — gitignored, rebuilt on every `npm install` via `prepare` hook. |
 | `tsconfig.json` | Strict TypeScript settings, `outDir: dist`. |
 | `tests/snapshot.js` | Snapshot test driver — imports from `dist/lib/render`. |
+| `lib/agent-defs.ts` | Persona → Claude Code agent mapping. Each entry produces `.claude/agents/<name>.md` with proper frontmatter (name, description, model). FRONTEND_AGENTS (9 personas) + BACKEND_AGENTS (6). |
+| `lib/settings.ts` | Read / merge / write `.claude/settings.json`. Deep-merges hooks, env, and permissions allow-list. Idempotent — re-running adds nothing if already present. Refuses to overwrite a malformed JSON file. |
 | `templates/frontend/implement-app/` | Frontend orchestrator kernel — methodology only (gates, personas incl. Inspector Clouseau, pipelines). No code templates, no shipped reference docs. |
 | `templates/backend/implement-backend/` | Backend orchestrator kernel — methodology only (gates, TDD-first personas, persona pointer table). No SQL assets, no shipped migration guide. |
 | `templates/shared/` | `jira-tracking/`, `create-pull-request/`, `sonar-fix/` — used by both orchestrators. |

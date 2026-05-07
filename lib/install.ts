@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { renderTree, writeTree, RenderIssue } from "./render";
 import * as prompts from "./prompts";
+import { AgentDef, renderAgentFile } from "./agent-defs";
 
 export function ensureDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
@@ -101,6 +102,64 @@ export function installHooks({ projectRoot, templateHooksDir, log }: InstallHook
     count += 1;
   }
   log?.(`  installed ${count} hook(s)`);
+}
+
+export interface InstallAgentsArgs {
+  projectRoot: string;
+  /** Where the orchestrator skill was just installed (post rename-on-conflict). */
+  resolvedSkillDir: string;
+  /** The persona table for the active stack. */
+  agents: readonly AgentDef[];
+  log?: (msg: string) => void;
+}
+
+export interface InstallAgentsResult {
+  written: string[];
+  overwritten: string[];
+  missingSource: string[];
+}
+
+/**
+ * Install Claude Code subagent files at .claude/agents/<name>.md so the
+ * orchestrator's @indiana / @sheep / etc spawns are recognised as registered
+ * subagent types rather than falling back to general-purpose.
+ *
+ * Source body comes from the orchestrator skill's team file; agent
+ * frontmatter (name / description / model) is added on copy.
+ *
+ * Existing agent files are OVERWRITTEN — the kernel ships specific personas
+ * tied to the gate flow and silent-skip would leave outdated content. The
+ * result reports which files were overwritten so the user can audit.
+ */
+export function installAgents(args: InstallAgentsArgs): InstallAgentsResult {
+  const { projectRoot, resolvedSkillDir, agents, log } = args;
+  const agentsDir = path.join(projectRoot, ".claude", "agents");
+  ensureDir(agentsDir);
+
+  const written: string[] = [];
+  const overwritten: string[] = [];
+  const missingSource: string[] = [];
+
+  for (const def of agents) {
+    const sourcePath = path.join(resolvedSkillDir, def.sourceFile);
+    if (!fs.existsSync(sourcePath)) {
+      missingSource.push(`${def.name} (expected ${def.sourceFile})`);
+      continue;
+    }
+    const sourceBody = fs.readFileSync(sourcePath, "utf8");
+    const rendered = renderAgentFile(def, sourceBody);
+    const dest = path.join(agentsDir, `${def.name}.md`);
+    const existed = fs.existsSync(dest);
+    fs.writeFileSync(dest, rendered);
+    if (existed) overwritten.push(def.name);
+    else written.push(def.name);
+  }
+
+  if (written.length) log?.(`  installed ${written.length} agent(s): ${written.join(", ")}`);
+  if (overwritten.length) log?.(`  ⚠ overwrote existing agent(s): ${overwritten.join(", ")}`);
+  if (missingSource.length) log?.(`  ✗ source missing for: ${missingSource.join(", ")}`);
+
+  return { written, overwritten, missingSource };
 }
 
 export interface InstallMcpArgs {

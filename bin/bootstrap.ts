@@ -3,9 +3,11 @@ import * as fs from "fs";
 import * as path from "path";
 import { detect, FrontendDetection, BackendDetection, AppEntry } from "../lib/detect";
 import * as prompts from "../lib/prompts";
-import { installSkill, installHooks, installMcp, InstallSkillResult } from "../lib/install";
+import { installSkill, installHooks, installMcp, installAgents, InstallSkillResult } from "../lib/install";
 import { runDiscovery, summarize } from "../lib/discover";
 import { installDependencies, DepSummary } from "../lib/post-install";
+import { mergeSettings, defaultHookPlan } from "../lib/settings";
+import { FRONTEND_AGENTS, BACKEND_AGENTS } from "../lib/agent-defs";
 
 const log = (msg: string) => process.stdout.write(`${msg}\n`);
 const err = (msg: string) => process.stderr.write(`${msg}\n`);
@@ -373,6 +375,15 @@ async function main(): Promise<void> {
     );
     installed.push(`.claude/skills/${mainResult.skillName}`);
 
+    log("\n── Installing frontend agents (.claude/agents/) ──");
+    installAgents({
+      projectRoot: cwd,
+      resolvedSkillDir: mainResult.target,
+      agents: FRONTEND_AGENTS,
+      log,
+    });
+    installed.push(".claude/agents/ (frontend personas)");
+
     await runPatternDiscovery({
       cwd,
       stacks: ["frontend"],
@@ -418,6 +429,15 @@ async function main(): Promise<void> {
     );
     installed.push(`.claude/skills/${mainResult.skillName}`);
 
+    log("\n── Installing backend agents (.claude/agents/) ──");
+    installAgents({
+      projectRoot: cwd,
+      resolvedSkillDir: mainResult.target,
+      agents: BACKEND_AGENTS,
+      log,
+    });
+    installed.push(".claude/agents/ (backend personas)");
+
     await runPatternDiscovery({
       cwd,
       stacks: ["backend"],
@@ -458,6 +478,26 @@ async function main(): Promise<void> {
       log,
     });
     installed.push(".claude/hooks/");
+
+    log("\n── Wiring hooks into .claude/settings.json ──");
+    const merged = mergeSettings({
+      projectRoot: cwd,
+      hooks: defaultHookPlan(),
+      env: {
+        // Project-wide defaults the orchestrator relies on at runtime.
+        // Overrideable via .claude/settings.local.json on the user's machine.
+        AGENT_BOOTSTRAP_VERSION: "0.4.0",
+      },
+      permissionsAllow: [
+        // Hooks need to read/write TASK.md and run jq from PATH.
+        "Bash(jq:*)",
+        "Bash(git rev-parse:*)",
+      ],
+      log,
+      err,
+    });
+    if (merged.ok) installed.push(".claude/settings.json");
+    else err(`(settings.json merge skipped: ${merged.warning})`);
   }
 
   if (integrations.mcp) {
