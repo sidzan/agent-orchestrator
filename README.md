@@ -3,7 +3,7 @@
 Drop a project-tailored multi-agent orchestration skill into any **React (TypeScript)** or **C# / .NET** project, in one command.
 
 ```bash
-npx agent-bootstrap@latest
+npx -p github:sidzan/agent-orchestrator -- agent-bootstrap
 ```
 
 The CLI inspects your project, asks a few questions, and writes a fresh, fully-rendered Claude Code skill into `.claude/skills/`. No template markers, no runtime config file, no surprises.
